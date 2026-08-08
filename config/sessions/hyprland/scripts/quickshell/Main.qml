@@ -139,20 +139,25 @@ PanelWindow {
         widgetCache[name] = obj;
     }
 
-    Component.onCompleted: {
-        Qt.callLater(() => preloadWidget("settings"));
-        preloadStaggerTimer.start();
-    }
-
-    Timer {
-        id: preloadStaggerTimer
-        interval: 900
-        repeat: false
-        onTriggered: {
-            preloadWidget("search");
-            preloadWidget("help");
-        }
-    }
+    // Nothing is preloaded any more, and settings least of all.
+    //
+    // Settings was the only widget this ever really preloaded: the two staggered
+    // calls named "search" and "help" have no entry in WindowRegistry.js, so both
+    // returned on the first line and always had. Settings alone was built at
+    // Component.onCompleted, into a 0x0 invisible container, before the window
+    // had settled -- and preloadWidget puts the result in widgetCache, which
+    // executeSwitch then prefers for the rest of the session. An object that came
+    // out of that early moment wrong stays wrong until the shell is reloaded,
+    // which is exactly the shape of the fault seen: the panel opens, the frame is
+    // the right 450px, and nothing is drawn inside it. Nothing is logged either,
+    // because nothing failed -- it was built, just not into anything with a size.
+    //
+    // Every widget that is not preloaded goes through StackView.replace(path) and
+    // none of them has ever come up empty. Settings takes that same path now.
+    //
+    // The machinery below is left in place but is called by nobody. Wanting it
+    // back means giving it a container with real geometry and some way to drop a
+    // bad object from the cache; it has neither today.
 
     // =========================================================
     // --- CLOSE ON WORKSPACE CHANGE
