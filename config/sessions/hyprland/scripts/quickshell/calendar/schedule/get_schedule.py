@@ -14,7 +14,9 @@ from selenium.common.exceptions import TimeoutException
 # --- CONFIGURATION ---
 BASE_URL = "https://all.uddataplus.dk/skema/?id=id_menu_skema"
 RESOURCE_ID = "99217" 
-PROFILE_PATH = "/home/ilyamiro/.mozilla/firefox/schedule.special"
+# Was hardcoded to the upstream author's home directory, so this could
+# never have found a profile on any other machine.
+PROFILE_PATH = os.path.join(os.path.expanduser("~"), ".mozilla/firefox/schedule.special")
 
 CACHE_DIR = os.environ.get("QS_CACHE_SCHEDULE", os.path.expanduser("~/.cache/quickshell/schedule"))
 CACHE_FILE = os.path.join(CACHE_DIR, "schedule.json")

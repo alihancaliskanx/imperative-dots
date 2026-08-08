@@ -32,28 +32,9 @@ Item {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
-    function compareVersions(local, remote) {
-        if (local === remote || local === "Unknown" || local === "Loading..." || !local || !remote) return false;
-
-        function parseVersion(v) {
-            let parts = v.split('-');
-            let base = parts[0].split('.').map(Number);
-            let rev = parts.length > 1 ? parseInt(parts[1]) : 0;
-            return { base: base, rev: rev };
-        }
-
-        let l = parseVersion(local);
-        let r = parseVersion(remote);
-
-        for (let i = 0; i < Math.max(l.base.length, r.base.length); i++) {
-            let lVal = l.base[i] || 0;
-            let rVal = r.base[i] || 0;
-            if (lVal < rVal) return true;
-            if (lVal > rVal) return false;
-        }
-
-        return l.rev < r.rev;
-    }
+    // compareVersions() lived here to weigh two DOTS_VERSION strings against
+    // each other. dots-version.sh answers with a commit count instead, so
+    // "behind" is just a number greater than zero and the parsing is gone.
 
     // -------------------------------------------------------------------------
     // KEYBOARD SHORTCUTS & NAVIGATION
@@ -139,24 +120,12 @@ Item {
     // GLOBALS
     // -------------------------------------------------------------------------
     property string dotsVersion: "Loading..."
-    property string remoteVersion: ""
-    property bool updateAvailable: false
-
-    onDotsVersionChanged: {
-        if (remoteVersion !== "" && dotsVersion !== "Loading...") {
-            updateAvailable = compareVersions(dotsVersion, remoteVersion);
-        }
-    }
-
-    onRemoteVersionChanged: {
-        if (remoteVersion !== "" && dotsVersion !== "Loading...") {
-            updateAvailable = compareVersions(dotsVersion, remoteVersion);
-        }
-    }
+    property int commitsBehind: 0
+    property bool updateAvailable: commitsBehind > 0
 
     Process {
         id: versionReader
-        command: ["bash", "-c", "source ~/.local/state/imperative-dots-version 2>/dev/null && echo $LOCAL_VERSION || echo 'Unknown'"]
+        command: ["bash", Config.qsScriptsDir + "/guide/dots-version.sh", "local"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
@@ -168,12 +137,12 @@ Item {
 
     Process {
         id: updateChecker
-        command: ["bash", "-c", "curl -m 5 -s https://raw.githubusercontent.com/ilyamiro/imperative-dots/master/install.sh | grep '^DOTS_VERSION=' | cut -d'\"' -f2"]
+        command: ["bash", Config.qsScriptsDir + "/guide/dots-version.sh", "behind"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
                 let out = this.text ? this.text.trim() : "";
-                if (out !== "") root.remoteVersion = out;
+                root.commitsBehind = parseInt(out) || 0;
             }
         }
     }
@@ -608,7 +577,8 @@ Item {
                         }
                         
                         Text {
-                            text: root.dotsVersion + "  " + root.remoteVersion
+                            text: root.dotsVersion + "  ·  " + root.commitsBehind
+                                  + (root.commitsBehind === 1 ? " commit behind" : " commits behind")
                             font.family: "JetBrains Mono"
                             font.pixelSize: root.s(10)
                             color: root.subtext0
@@ -622,7 +592,16 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            let cmd = "if command -v kitty >/dev/null 2>&1; then kitty --hold bash -c 'eval \"$(curl -fsSL https://raw.githubusercontent.com/ilyamiro/imperative-dots/master/install.sh)\"'; else ${TERM:-xterm} -hold -e bash -c 'eval \"$(curl -fsSL https://raw.githubusercontent.com/ilyamiro/imperative-dots/master/install.sh)\"'; fi";
+                            // Updating a fork means pulling its checkout, not fetching and
+                            // running a stranger's installer, which is what this did before and
+                            // what would have overwritten every local change. Alacritty first,
+                            // since that is the terminal this desktop actually sets.
+                            let script = Config.qsScriptsDir + "/guide/dots-version.sh";
+                            let cmd = "if command -v alacritty >/dev/null 2>&1; then "
+                                    + "alacritty --hold -e bash '" + script + "' pull; "
+                                    + "elif command -v kitty >/dev/null 2>&1; then "
+                                    + "kitty --hold bash '" + script + "' pull; "
+                                    + "else ${TERM:-xterm} -hold -e bash '" + script + "' pull; fi";
                             Quickshell.execDetached(["bash", "-c", cmd]);
                         }
                     }
@@ -695,7 +674,7 @@ Item {
                     ListElement { pkg: "Quickshell"; role: "UI Framework"; icon: "󰣆"; clr: "mauve"; link: "https://git.outfoxxed.me/outfoxxed/quickshell" }
                     ListElement { pkg: "Matugen"; role: "Theme Engine"; icon: "󰏘"; clr: "peach"; link: "https://github.com/InioX/matugen" }
                     ListElement { pkg: "Rofi Wayland"; role: "App Launcher"; icon: ""; clr: "green"; link: "https://github.com/lbonn/rofi" }
-                    ListElement { pkg: "Kitty"; role: "Terminal Emulator"; icon: "󰄛"; clr: "yellow"; link: "https://sw.kovidgoyal.net/kitty/" }
+                    ListElement { pkg: "Alacritty"; role: "Terminal Emulator"; icon: ""; clr: "yellow"; link: "https://alacritty.org/" }
                     ListElement { pkg: "SwayOSD / NC"; role: "Overlays & Notifs"; icon: "󰂚"; clr: "pink"; link: "https://github.com/ErikReider/SwayOSD" }
                 }
 
@@ -943,7 +922,7 @@ Item {
                                 Layout.alignment: Qt.AlignVCenter
                                 spacing: root.s(1)
                                 Repeater {
-                                    model: [ { l: "i", c: root.red }, { l: "l", c: root.peach }, { l: "y", c: root.yellow }, { l: "a", c: root.green }, { l: "m", c: root.sapphire }, { l: "i", c: root.blue }, { l: "r", c: root.mauve }, { l: "o", c: root.pink } ]
+                                    model: [ { l: "a", c: root.red }, { l: "l", c: root.peach }, { l: "i", c: root.yellow }, { l: "h", c: root.green }, { l: "a", c: root.sapphire }, { l: "n", c: root.blue }, { l: "c", c: root.mauve }, { l: "a", c: root.pink }, { l: "l", c: root.red }, { l: "i", c: root.peach }, { l: "s", c: root.yellow }, { l: "k", c: root.green }, { l: "a", c: root.sapphire }, { l: "n", c: root.blue }, { l: "x", c: root.mauve } ]
                                     Text { 
                                         text: modelData.l
                                         font.family: "JetBrains Mono"
@@ -980,7 +959,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: Quickshell.execDetached(["xdg-open", "https://github.com/ilyamiro/nixos-configuration"]) 
+                            onClicked: Quickshell.execDetached(["xdg-open", "https://github.com/alihancaliskanx"]) 
                         }
                     }
 
@@ -1543,9 +1522,9 @@ Item {
 
                     Repeater {
                         model: [
-                            { name: "NixOS Config", icon: "", color: "blue", url: "https://github.com/ilyamiro/nixos-configuration" },
-                            { name: "Imperative Dots", icon: "󰣇", color: "mauve", url: "https://github.com/ilyamiro/imperative-dots" },
-                            { name: "Wallpapers", icon: "", color: "peach", url: "https://github.com/ilyamiro/shell-wallpapers" }
+                            { name: "Dotfiles", icon: "󰣇", color: "blue", url: "https://github.com/alihancaliskanx/dotfiles" },
+                            { name: "Imperative Dots", icon: "", color: "mauve", url: "https://github.com/alihancaliskanx/imperative-dots" },
+                            { name: "Rainy Night", icon: "", color: "peach", url: "https://github.com/alihancaliskanx/omarchy-rainynight-theme" }
                         ]
 
                         Rectangle {
