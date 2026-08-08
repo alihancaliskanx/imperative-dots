@@ -43,8 +43,14 @@ Scope {
     function confirm() {
         if (!active) return;
         active = false;
+        Hyprland.dispatch("submap reset");
         const t = wins.values[selected];
         if (t) Hyprland.dispatch("focuswindow address:0x" + t.address);
+    }
+
+    function dismiss() {
+        active = false;
+        Hyprland.dispatch("submap reset");
     }
 
     IpcHandler {
@@ -54,12 +60,14 @@ Scope {
         // is "go back to the last thing", exactly as it is everywhere else.
         function open(): void {
             if (root.count === 0) return;
+            // Already up: another Super+Tab means "advance", not "start over".
+            if (root.active) { root.step(1); return; }
             root.selected = root.count > 1 ? 1 : 0;
             root.active = true;
         }
         function next(): void { if (root.active) root.step(1); else open(); }
         function prev(): void { if (root.active) root.step(-1); else open(); }
-        function cancel(): void { root.active = false; }
+        function cancel(): void { root.dismiss(); }
 
         function select(): void { root.confirm(); }
     }
@@ -82,7 +90,7 @@ Scope {
         // Click-off cancels, like every other overlay here.
         MouseArea {
             anchors.fill: parent
-            onClicked: root.active = false
+            onClicked: root.dismiss()
         }
 
         Item {
@@ -105,7 +113,7 @@ Scope {
                     case Qt.Key_Down:      root.step(1); break;
                     case Qt.Key_Left:
                     case Qt.Key_Up:        root.step(-1); break;
-                    case Qt.Key_Escape:    root.active = false; break;
+                    case Qt.Key_Escape:    root.dismiss(); break;
                     case Qt.Key_Return:
                     case Qt.Key_Enter:     root.confirm(); break;
                     default: return;

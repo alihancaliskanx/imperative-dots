@@ -18,7 +18,13 @@ QS_CONFIG="$HOME/.config/hypr/scripts/quickshell/Shell.qml"
 ipc() { qs -p "$QS_CONFIG" ipc call switcher "$1" >/dev/null 2>&1; }
 
 case "${1:-}" in
-    open)   ipc open ;;
+    open)
+        ipc open
+        # The submap is what routes the next Tab to the switcher instead of
+        # letting Hyprland's own binding fire again. Leaving it is the
+        # switcher's job — it dispatches `submap reset` when it closes.
+        hyprctl dispatch submap switcher >/dev/null
+        ;;
     next)   ipc next ;;
     prev)   ipc prev ;;
     select) ipc select ;;
