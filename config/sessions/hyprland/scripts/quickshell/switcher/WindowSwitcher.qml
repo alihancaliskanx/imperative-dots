@@ -14,8 +14,11 @@
 // Order is the list order, deliberately not most-recently-used: a stable strip
 // means the same window is always the same number of taps away.
 //
-// Driven over IPC from switcher.sh, which also flips the Hyprland submap:
-//   qs ipc call switcher open | next | prev | select | cancel
+// Only opening comes from Hyprland (Super+Tab). Everything after that is this
+// window's own keyboard grab: it takes exclusive keyboard focus, so it sees Tab,
+// the arrows, Escape — and crucially the moment Super is *released*, which is
+// the confirm. Hyprland's own release bindings inside a submap were the first
+// attempt and did not hold the menu open reliably.
 
 import QtQuick
 import Quickshell
@@ -37,6 +40,13 @@ Scope {
         selected = ((selected + delta) % count + count) % count;
     }
 
+    function confirm() {
+        if (!active) return;
+        active = false;
+        const t = wins.values[selected];
+        if (t) Hyprland.dispatch("focuswindow address:0x" + t.address);
+    }
+
     IpcHandler {
         target: "switcher"
 
@@ -51,12 +61,7 @@ Scope {
         function prev(): void { if (root.active) root.step(-1); else open(); }
         function cancel(): void { root.active = false; }
 
-        function select(): void {
-            if (!root.active) return;
-            root.active = false;
-            const t = root.wins.values[root.selected];
-            if (t) Hyprland.dispatch("focuswindow address:0x" + t.address);
-        }
+        function select(): void { root.confirm(); }
     }
 
     PanelWindow {
@@ -66,7 +71,9 @@ Scope {
 
         WlrLayershell.namespace: "qs-switcher"
         WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: root.active ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         exclusionMode: ExclusionMode.Ignore
+        focusable: true
 
         anchors { top: true; bottom: true; left: true; right: true }
 
@@ -76,6 +83,45 @@ Scope {
         MouseArea {
             anchors.fill: parent
             onClicked: root.active = false
+        }
+
+        Item {
+            anchors.fill: parent
+            focus: true
+            // Re-take focus every time the strip opens; without this the grab
+            // only works on the first invocation of a session.
+            onVisibleChanged: if (visible) forceActiveFocus()
+            Connections {
+                target: root
+                function onActiveChanged() { if (root.active) keys.forceActiveFocus(); }
+            }
+            id: keys
+
+            Keys.onPressed: event => {
+                switch (event.key) {
+                    case Qt.Key_Tab:       root.step(event.modifiers & Qt.ShiftModifier ? -1 : 1); break;
+                    case Qt.Key_Backtab:   root.step(-1); break;
+                    case Qt.Key_Right:
+                    case Qt.Key_Down:      root.step(1); break;
+                    case Qt.Key_Left:
+                    case Qt.Key_Up:        root.step(-1); break;
+                    case Qt.Key_Escape:    root.active = false; break;
+                    case Qt.Key_Return:
+                    case Qt.Key_Enter:     root.confirm(); break;
+                    default: return;
+                }
+                event.accepted = true;
+            }
+
+            // The confirm. Qt reports the Super key as Meta on Wayland, so both
+            // spellings are accepted rather than guessing which one arrives.
+            Keys.onReleased: event => {
+                if (event.key === Qt.Key_Super_L || event.key === Qt.Key_Super_R
+                    || event.key === Qt.Key_Meta) {
+                    root.confirm();
+                    event.accepted = true;
+                }
+            }
         }
 
         Rectangle {
