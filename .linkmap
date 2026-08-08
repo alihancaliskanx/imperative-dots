@@ -12,7 +12,6 @@
 config/sessions/hyprland     .config/hypr
 config/programs/matugen      .config/matugen
 config/programs/cava         .config/cava
-config/programs/kitty        .config/kitty
 config/programs/rofi         .config/rofi
 
 # Deliberately not linked:
@@ -24,3 +23,8 @@ config/programs/rofi         .config/rofi
 #   config/programs/swayosd  nothing but a default.nix, no config to link
 #   config/fonts             ttf-jetbrains-mono-nerd covers these from the repos
 #   *.nix                    home-manager glue, meaningless on Arch
+
+# Not linked: config/programs/kitty — linking it meant the dotfiles' whole
+# `terminal` package had to come out, which took alacritty.toml with it and
+# left alacritty running on its defaults, title bar and all. The terminal here
+# is alacritty; kitty keeps its own config from the dotfiles repo.
