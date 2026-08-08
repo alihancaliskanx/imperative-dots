@@ -149,9 +149,9 @@ Item {
         } else if (root.currentTab === 1) {
             if (root.highlightedBox === 0) {
             } else if (root.highlightedBox === 1) {
-                if (weatherLoader.item) weatherLoader.item.focusApiKey();
+                if (weatherLoader.item) weatherLoader.item.togglePlaceDropdown();
             } else if (root.highlightedBox === 2) {
-                if (weatherLoader.item) weatherLoader.item.focusCityId();
+                if (weatherLoader.item) weatherLoader.item.focusPlaceSearch();
             } else if (root.highlightedBox === 3) {
             }
         } else if (root.currentTab === 2) {
@@ -888,8 +888,8 @@ Item {
         { tab: 0, boxIndex: 4, label: "Layout shortcut",   desc: "Toggle combination",     icon: "󰯍", color: "teal" },
         { tab: 0, boxIndex: 5, label: "Wallpaper directory",desc: "Absolute source path",  icon: "󰋩", color: "mauve" },
         { tab: 0, boxIndex: 6, label: "Workspaces",        desc: "Static count in topbar", icon: "󰽿", color: "red" },
-        { tab: 1, boxIndex: 1, label: "API Key",           desc: "OpenWeather API key",    icon: "󰌆", color: "blue" },
-        { tab: 1, boxIndex: 2, label: "City ID",           desc: "OpenWeather city ID",    icon: "󰖐", color: "blue" },
+        { tab: 1, boxIndex: 1, label: "Location",          desc: "Saved places",           icon: "󰍎", color: "blue" },
+        { tab: 1, boxIndex: 2, label: "Add a location",    desc: "Search by name",         icon: "󰥔", color: "blue" },
         { tab: 1, boxIndex: 3, label: "Temperature Unit",  desc: "Celsius / Fahrenheit / K", icon: "󰔄", color: "blue" }
     ]
 
@@ -1855,8 +1855,31 @@ Item {
         Item {
             id: weatherTabRoot
 
-            function focusApiKey() { apiKeyInput.forceActiveFocus(); }
-            function focusCityId() { cityIdInput.forceActiveFocus(); }
+            function focusPlaceSearch() { placeSearchInput.forceActiveFocus(); }
+            function togglePlaceDropdown() { weatherTabRoot.isPlaceDropdownOpen = !weatherTabRoot.isPlaceDropdownOpen; }
+
+            function searchPlace(query) {
+                if (!query || query.trim() === "") return;
+                geoResultsModel.clear();
+                weatherTabRoot.geoStatus = "searching…";
+                geoSearch.running = false;
+                geoSearch.command = ["bash", Config.qsScriptsDir + "/calendar/geocode.sh", query.trim()];
+                geoSearch.running = true;
+            }
+
+            function addManualPlace() {
+                let lat = (weatherTabRoot.manualFields.lat || "").trim();
+                let lon = (weatherTabRoot.manualFields.lon || "").trim();
+                if (lat === "" || lon === "" || isNaN(Number(lat)) || isNaN(Number(lon))) {
+                    weatherTabRoot.geoStatus = "needs two numbers";
+                    return;
+                }
+                let name = (weatherTabRoot.manualFields.name || "").trim();
+                Config.addWeatherPlace(name !== "" ? name : lat + ", " + lon, lat, lon);
+                weatherTabRoot.manualFields = { name: "", lat: "", lon: "" };
+                weatherTabRoot.geoStatus = "";
+            }
+
             function scrollTo(y) {
                 let maxY = Math.max(0, weatherFlickable.contentHeight - weatherFlickable.height);
                 weatherFlickable.contentY = Math.max(0, Math.min(y - root.s(40), maxY > 0 ? maxY : y));
@@ -1874,18 +1897,33 @@ Item {
                 }
             }
 
-            Component.onCompleted: {
-                apiKeyInput.text = Config.weatherApiKey;
-                cityIdInput.text = Config.weatherCityId;
-            }
+            property bool isPlaceDropdownOpen: false
+            property string geoStatus: ""
+            property var manualFields: ({ name: "", lat: "", lon: "" })
 
-            Connections {
-                target: Config
-                function onWeatherApiKeyChanged() { if (apiKeyInput.text !== Config.weatherApiKey) apiKeyInput.text = Config.weatherApiKey; }
-                function onWeatherCityIdChanged() { if (cityIdInput.text !== Config.weatherCityId) cityIdInput.text = Config.weatherCityId; }
-            }
+            ListModel { id: geoResultsModel }
 
-            property bool apiKeyVisible: false
+            // geocode.sh prints one "label<TAB>lat<TAB>lon" per match, so the
+            // results need no JSON parsing here and an empty stdout is simply no
+            // match — the same thing a failed request looks like, which is why
+            // the status line says "nothing found" for both rather than guessing.
+            Process {
+                id: geoSearch
+                running: false
+                stdout: StdioCollector {
+                    onStreamFinished: {
+                        geoResultsModel.clear();
+                        let lines = this.text ? this.text.trim().split("\n") : [];
+                        for (let line of lines) {
+                            if (line.trim() === "") continue;
+                            let parts = line.split("\t");
+                            if (parts.length < 3) continue;
+                            geoResultsModel.append({ label: parts[0], lat: parts[1], lon: parts[2] });
+                        }
+                        weatherTabRoot.geoStatus = geoResultsModel.count > 0 ? "" : "nothing found";
+                    }
+                }
+            }
 
             Flickable {
                 id: weatherFlickable
@@ -1923,7 +1961,7 @@ Item {
                             anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; anchors.margins: root.s(14)
                             spacing: root.s(10)
                             Text {
-                                text: "Weather Widget Setup"; font.family: "Inter"; font.weight: Font.Bold; font.pixelSize: root.s(15)
+                                text: "Weather Location"; font.family: "Inter"; font.weight: Font.Bold; font.pixelSize: root.s(15)
                                 color: wBox0.isActive ? root.base : root.text; Layout.bottomMargin: root.s(2)
                                 Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                             }
@@ -1937,7 +1975,7 @@ Item {
                                     Text { anchors.centerIn: parent; text: "1"; font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: root.s(11); color: wBox0.isActive ? root.base : root.blue; Behavior on color { ColorAnimation { duration: 220 } } }
                                 }
                                 Text {
-                                    text: "Get an API Key"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(13)
+                                    text: "Pick a saved place"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(13)
                                     color: wBox0.isActive ? root.base : root.text; Layout.fillWidth: true
                                     Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                 }
@@ -1955,7 +1993,7 @@ Item {
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: root.s(6); Layout.topMargin: root.s(2); Layout.bottomMargin: root.s(2)
                                     Repeater {
-                                        model: ["Go to openweathermap.org & create an account.", "Navigate to profile -> 'My API keys'.", "Generate a new key and paste it below."]
+                                        model: ["Open the Location box below.", "Click a city — it applies immediately.", "Use the ✕ on a row to drop it from the list."]
                                         Rectangle {
                                             Layout.fillWidth: true; Layout.preferredHeight: root.s(30)
                                             radius: root.s(6)
@@ -1981,7 +2019,7 @@ Item {
                                     Text { anchors.centerIn: parent; text: "2"; font.family: "JetBrains Mono"; font.weight: Font.Bold; font.pixelSize: root.s(11); color: wBox0.isActive ? root.base : root.peach; Behavior on color { ColorAnimation { duration: 220 } } }
                                 }
                                 Text {
-                                    text: "Find your City ID"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(13)
+                                    text: "Add one that is missing"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(13)
                                     color: wBox0.isActive ? root.base : root.text; Layout.fillWidth: true
                                     Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                 }
@@ -2003,7 +2041,7 @@ Item {
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: root.s(6); Layout.topMargin: root.s(2); Layout.bottomMargin: root.s(2)
                                     Repeater {
-                                        model: ["Search for your city on openweathermap.org.", "Look at the URL (e.g. .../city/2643743).", "Copy the number at the end and paste below."]
+                                        model: ["Type the name under 'Add a location'.", "Press Enter, then click the right match.", "Or type a latitude and longitude by hand."]
                                         Rectangle {
                                             Layout.fillWidth: true; Layout.preferredHeight: root.s(30)
                                             radius: root.s(6)
@@ -2020,18 +2058,18 @@ Item {
                                 }
                             }
                             Text {
-                                text: "* Note: New API keys may take a few hours to activate."; font.family: "Inter"; font.pixelSize: root.s(10)
+                                text: "* Open-Meteo needs only a coordinate, so there is no account or key to manage."; font.family: "Inter"; font.pixelSize: root.s(10)
                                 color: wBox0.isActive ? Qt.alpha(root.base, 0.7) : root.yellow; font.italic: true; Layout.topMargin: root.s(2)
                                 Behavior on color { ColorAnimation { duration: 220 } }
                             }
                         }
                     }
 
-                    // ── Box 1: API Key ───────────────────────────────────────
+                    // ── Box 1: Location ──────────────────────────────────────
                     Rectangle {
                         id: wBox1
                         Layout.fillWidth: true
-                        Layout.preferredHeight: apiKeyRow.implicitHeight + root.s(28)
+                        Layout.preferredHeight: placeCol.implicitHeight + root.s(28)
                         radius: root.s(12)
 
                         property bool isActive: root.highlightedBox === 1
@@ -2039,11 +2077,12 @@ Item {
                         border.color: isActive ? root.blue : root.surface1
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                        clip: true
 
                         MouseArea { anchors.fill: parent; onClicked: root.highlightedBox = 1; z: -1 }
 
                         ColumnLayout {
-                            id: apiKeyRow
+                            id: placeCol
                             anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; anchors.margins: root.s(16)
                             spacing: root.s(10)
                             RowLayout {
@@ -2051,7 +2090,7 @@ Item {
                                 Item {
                                     Layout.preferredWidth: root.s(22); Layout.alignment: Qt.AlignVCenter
                                     Text {
-                                        anchors.centerIn: parent; text: "󰌆"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(18)
+                                        anchors.centerIn: parent; text: "󰍎"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(18)
                                         color: wBox1.isActive ? root.base : root.blue
                                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                     }
@@ -2059,71 +2098,153 @@ Item {
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: root.s(3)
                                     Text {
-                                        text: "API Key"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(14)
+                                        text: "Location"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(14)
                                         color: wBox1.isActive ? root.base : root.text; Layout.fillWidth: true
                                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                     }
                                     Text {
-                                        text: "OpenWeather API key"; font.family: "Inter"; font.pixelSize: root.s(11)
+                                        text: "Applies as soon as you pick one"; font.family: "Inter"; font.pixelSize: root.s(11)
                                         color: wBox1.isActive ? Qt.alpha(root.base, 0.75) : Qt.alpha(root.subtext0, 0.7); Layout.fillWidth: true
                                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                     }
                                 }
                             }
+
+                            // The closed selection box: current place on the left,
+                            // its coordinate on the right so two entries with the
+                            // same name stay tellable apart.
                             Rectangle {
-                                Layout.fillWidth: true; Layout.preferredHeight: root.s(42)
+                                Layout.fillWidth: true; Layout.preferredHeight: root.s(38)
                                 radius: root.s(7)
                                 color: wBox1.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
-                                border.color: apiKeyInput.activeFocus
+                                border.color: weatherTabRoot.isPlaceDropdownOpen
                                     ? (wBox1.isActive ? root.base : root.blue)
                                     : (wBox1.isActive ? Qt.alpha(root.base, 0.3) : root.surface2)
                                 border.width: 1
-                                Behavior on border.color { ColorAnimation { duration: 150 } }
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
                                 Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                 RowLayout {
-                                    anchors.fill: parent; anchors.margins: root.s(10); spacing: root.s(10)
+                                    anchors.fill: parent; anchors.margins: root.s(10); spacing: root.s(8)
                                     Text {
-                                        text: "󰌆"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(16)
-                                        color: wBox1.isActive ? Qt.alpha(root.base, 0.6) : root.subtext0
+                                        text: Config.weatherPlace !== "" ? Config.weatherPlace : "No location set"
+                                        font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(12)
+                                        color: wBox1.isActive ? root.base : root.text
+                                        elide: Text.ElideRight; Layout.fillWidth: true
                                         Behavior on color { ColorAnimation { duration: 220 } }
                                     }
-                                    TextInput { 
-                                        id: apiKeyInput
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        font.family: "JetBrains Mono"; font.pixelSize: root.s(12)
-                                        color: wBox1.isActive ? root.base : root.text; clip: true; selectByMouse: true
-                                        echoMode: weatherTabRoot.apiKeyVisible ? TextInput.Normal : TextInput.Password
-                                        passwordCharacter: "•"
-                                        onTextChanged: Config.weatherApiKey = text
+                                    Text {
+                                        text: Config.weatherLat + ", " + Config.weatherLon
+                                        font.family: "JetBrains Mono"; font.pixelSize: root.s(10)
+                                        color: wBox1.isActive ? Qt.alpha(root.base, 0.7) : root.overlay0
                                         Behavior on color { ColorAnimation { duration: 220 } }
-                                        Text {
-                                            text: "Enter API Key..."; color: wBox1.isActive ? Qt.alpha(root.base, 0.5) : root.subtext0
-                                            visible: !parent.text && !parent.activeFocus; font: parent.font; anchors.verticalCenter: parent.verticalCenter
-                                            Behavior on color { ColorAnimation { duration: 220 } }
-                                        }
                                     }
-                                    Rectangle {
-                                        width: root.s(24); height: root.s(24); radius: root.s(4); color: "transparent"
-                                        Text {
-                                            anchors.centerIn: parent; text: weatherTabRoot.apiKeyVisible ? "󰈈" : "󰈉"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(16)
-                                            color: eyeMa.containsMouse
-                                                ? (wBox1.isActive ? root.base : root.blue)
-                                                : (wBox1.isActive ? Qt.alpha(root.base, 0.6) : root.subtext0)
-                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                    Text {
+                                        text: weatherTabRoot.isPlaceDropdownOpen ? "▴" : "▾"; font.pixelSize: root.s(12)
+                                        color: wBox1.isActive ? Qt.alpha(root.base, 0.7) : root.subtext0
+                                        Behavior on color { ColorAnimation { duration: 220 } }
+                                    }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.highlightedBox = 1;
+                                        weatherTabRoot.isPlaceDropdownOpen = !weatherTabRoot.isPlaceDropdownOpen;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: weatherTabRoot.isPlaceDropdownOpen
+                                    ? Config.weatherPlaces.length * root.s(34) + root.s(8) : 0
+                                radius: root.s(7)
+                                color: wBox1.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
+                                border.color: wBox1.isActive ? Qt.alpha(root.base, 0.3) : root.surface1
+                                border.width: 1
+                                clip: true
+                                Behavior on Layout.preferredHeight { NumberAnimation { duration: 250; easing.type: Easing.OutExpo } }
+                                Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                                ListView {
+                                    id: placeListView
+                                    anchors.fill: parent; anchors.topMargin: root.s(4); anchors.bottomMargin: root.s(4)
+                                    model: Config.weatherPlaces; interactive: false
+                                    opacity: parent.Layout.preferredHeight > root.s(10) ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                    delegate: Rectangle {
+                                        width: placeListView.width - root.s(8); height: root.s(34)
+                                        anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
+                                        radius: root.s(4)
+                                        property bool isCurrent: modelData.lat === Config.weatherLat && modelData.lon === Config.weatherLon
+                                        color: placeMa.containsMouse
+                                            ? Qt.alpha(wBox1.isActive ? root.base : root.blue, 0.2)
+                                            : (isCurrent ? Qt.alpha(wBox1.isActive ? root.base : root.blue, 0.1) : "transparent")
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        MouseArea {
+                                            id: placeMa
+                                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                Config.selectWeatherPlace(index);
+                                                weatherTabRoot.isPlaceDropdownOpen = false;
+                                            }
                                         }
-                                        MouseArea { id: eyeMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: weatherTabRoot.apiKeyVisible = !weatherTabRoot.apiKeyVisible }
+                                        RowLayout {
+                                            anchors.fill: parent; anchors.leftMargin: root.s(8); anchors.rightMargin: root.s(6); spacing: root.s(6)
+                                            Text {
+                                                text: parent.parent.isCurrent ? "󰄬" : "󰍎"
+                                                font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(12)
+                                                color: parent.parent.isCurrent
+                                                    ? (wBox1.isActive ? root.base : root.blue)
+                                                    : (wBox1.isActive ? Qt.alpha(root.base, 0.5) : root.overlay0)
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
+                                            Text {
+                                                text: modelData.name; font.family: "Inter"; font.pixelSize: root.s(11)
+                                                color: parent.parent.isCurrent
+                                                    ? (wBox1.isActive ? root.base : root.blue)
+                                                    : (wBox1.isActive ? Qt.alpha(root.base, 0.8) : root.text)
+                                                elide: Text.ElideRight; Layout.fillWidth: true
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
+                                            Text {
+                                                text: modelData.lat + ", " + modelData.lon
+                                                font.family: "JetBrains Mono"; font.pixelSize: root.s(9)
+                                                color: wBox1.isActive ? Qt.alpha(root.base, 0.55) : root.overlay0
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+                                            }
+                                            // Removal lives on the row rather than
+                                            // behind a mode: fewer clicks, and the
+                                            // last entry keeps no button at all so
+                                            // the list can never be emptied.
+                                            Rectangle {
+                                                Layout.preferredWidth: root.s(22); Layout.preferredHeight: root.s(22)
+                                                radius: root.s(4); color: "transparent"
+                                                visible: Config.weatherPlaces.length > 1
+                                                Text {
+                                                    anchors.centerIn: parent; text: "󰅖"
+                                                    font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(11)
+                                                    color: delMa.containsMouse
+                                                        ? root.red
+                                                        : (wBox1.isActive ? Qt.alpha(root.base, 0.5) : root.overlay0)
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                                }
+                                                MouseArea {
+                                                    id: delMa
+                                                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                                    onClicked: Config.removeWeatherPlace(index)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // ── Box 2: City ID ───────────────────────────────────────
+                    // ── Box 2: Add a location ────────────────────────────────
                     Rectangle {
                         id: wBox2
                         Layout.fillWidth: true
-                        Layout.preferredHeight: cityIdRow.implicitHeight + root.s(28)
+                        Layout.preferredHeight: addPlaceCol.implicitHeight + root.s(28)
                         radius: root.s(12)
 
                         property bool isActive: root.highlightedBox === 2
@@ -2131,11 +2252,12 @@ Item {
                         border.color: isActive ? root.blue : root.surface1
                         border.width: 1
                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                        clip: true
 
                         MouseArea { anchors.fill: parent; onClicked: root.highlightedBox = 2; z: -1 }
 
                         ColumnLayout {
-                            id: cityIdRow
+                            id: addPlaceCol
                             anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; anchors.margins: root.s(16)
                             spacing: root.s(10)
                             RowLayout {
@@ -2143,7 +2265,7 @@ Item {
                                 Item {
                                     Layout.preferredWidth: root.s(22); Layout.alignment: Qt.AlignVCenter
                                     Text {
-                                        anchors.centerIn: parent; text: "󰖐"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(18)
+                                        anchors.centerIn: parent; text: "󰥔"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(18)
                                         color: wBox2.isActive ? root.base : root.blue
                                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                     }
@@ -2151,39 +2273,173 @@ Item {
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: root.s(3)
                                     Text {
-                                        text: "City ID"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(14)
+                                        text: "Add a location"; font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(14)
                                         color: wBox2.isActive ? root.base : root.text; Layout.fillWidth: true
                                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                     }
                                     Text {
-                                        text: "OpenWeather city ID"; font.family: "Inter"; font.pixelSize: root.s(11)
+                                        text: "Type a place name and press Enter"; font.family: "Inter"; font.pixelSize: root.s(11)
                                         color: wBox2.isActive ? Qt.alpha(root.base, 0.75) : Qt.alpha(root.subtext0, 0.7); Layout.fillWidth: true
                                         Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                     }
                                 }
                             }
+
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: root.s(42)
                                 radius: root.s(7)
                                 color: wBox2.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
-                                border.color: cityIdInput.activeFocus
+                                border.color: placeSearchInput.activeFocus
                                     ? (wBox2.isActive ? root.base : root.blue)
                                     : (wBox2.isActive ? Qt.alpha(root.base, 0.3) : root.surface2)
                                 border.width: 1
                                 Behavior on border.color { ColorAnimation { duration: 150 } }
                                 Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
-                                TextInput {
-                                    id: cityIdInput
-                                    anchors.fill: parent; anchors.margins: root.s(10)
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    font.family: "JetBrains Mono"; font.pixelSize: root.s(12)
-                                    color: wBox2.isActive ? root.base : root.text; clip: true; selectByMouse: true
-                                    onTextChanged: Config.weatherCityId = text
-                                    Behavior on color { ColorAnimation { duration: 220 } }
+                                RowLayout {
+                                    anchors.fill: parent; anchors.margins: root.s(10); spacing: root.s(10)
                                     Text {
-                                        text: "City ID (e.g. 2624652)"; color: wBox2.isActive ? Qt.alpha(root.base, 0.5) : root.subtext0
-                                        visible: !parent.text && !parent.activeFocus; font: parent.font; anchors.verticalCenter: parent.verticalCenter
+                                        text: "󰍉"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(16)
+                                        color: wBox2.isActive ? Qt.alpha(root.base, 0.6) : root.subtext0
                                         Behavior on color { ColorAnimation { duration: 220 } }
+                                    }
+                                    TextInput {
+                                        id: placeSearchInput
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        font.family: "Inter"; font.pixelSize: root.s(12)
+                                        color: wBox2.isActive ? root.base : root.text; clip: true; selectByMouse: true
+                                        Behavior on color { ColorAnimation { duration: 220 } }
+                                        onAccepted: weatherTabRoot.searchPlace(text)
+                                        Text {
+                                            text: "Kadıköy, Trabzon, Berlin…"
+                                            color: wBox2.isActive ? Qt.alpha(root.base, 0.5) : root.subtext0
+                                            visible: !parent.text && !parent.activeFocus; font: parent.font
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Behavior on color { ColorAnimation { duration: 220 } }
+                                        }
+                                    }
+                                    Text {
+                                        visible: weatherTabRoot.geoStatus !== ""
+                                        text: weatherTabRoot.geoStatus
+                                        font.family: "Inter"; font.pixelSize: root.s(10); font.italic: true
+                                        color: wBox2.isActive ? Qt.alpha(root.base, 0.7) : root.yellow
+                                        Behavior on color { ColorAnimation { duration: 220 } }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: geoResultsModel.count > 0
+                                    ? geoResultsModel.count * root.s(32) + root.s(8) : 0
+                                radius: root.s(7)
+                                color: wBox2.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
+                                border.color: wBox2.isActive ? Qt.alpha(root.base, 0.3) : root.surface1
+                                border.width: 1
+                                clip: true
+                                Behavior on Layout.preferredHeight { NumberAnimation { duration: 250; easing.type: Easing.OutExpo } }
+                                ListView {
+                                    id: geoResultsView
+                                    anchors.fill: parent; anchors.topMargin: root.s(4); anchors.bottomMargin: root.s(4)
+                                    model: geoResultsModel; interactive: false
+                                    opacity: parent.Layout.preferredHeight > root.s(10) ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                    delegate: Rectangle {
+                                        width: geoResultsView.width - root.s(8); height: root.s(32)
+                                        anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
+                                        radius: root.s(4)
+                                        color: resMa.containsMouse
+                                            ? Qt.alpha(wBox2.isActive ? root.base : root.blue, 0.2) : "transparent"
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        RowLayout {
+                                            anchors.fill: parent; anchors.leftMargin: root.s(8); anchors.rightMargin: root.s(8); spacing: root.s(6)
+                                            Text {
+                                                text: "󰐕"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(11)
+                                                color: wBox2.isActive ? Qt.alpha(root.base, 0.6) : root.green
+                                            }
+                                            Text {
+                                                text: model.label; font.family: "Inter"; font.pixelSize: root.s(11)
+                                                color: wBox2.isActive ? Qt.alpha(root.base, 0.9) : root.text
+                                                elide: Text.ElideRight; Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: model.lat + ", " + model.lon
+                                                font.family: "JetBrains Mono"; font.pixelSize: root.s(9)
+                                                color: wBox2.isActive ? Qt.alpha(root.base, 0.55) : root.overlay0
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: resMa
+                                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                Config.addWeatherPlace(model.label, model.lat, model.lon);
+                                                geoResultsModel.clear();
+                                                placeSearchInput.text = "";
+                                                weatherTabRoot.geoStatus = "";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Manual entry stays available because the geocoder
+                            // does not know every village, and because it needs
+                            // the network — a coordinate typed by hand does not.
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: root.s(8)
+                                Repeater {
+                                    model: [
+                                        { ph: "Name (optional)", ref: "name", fill: true  },
+                                        { ph: "Latitude",        ref: "lat",  fill: false },
+                                        { ph: "Longitude",       ref: "lon",  fill: false }
+                                    ]
+                                    Rectangle {
+                                        Layout.fillWidth: modelData.fill
+                                        Layout.preferredWidth: modelData.fill ? root.s(120) : root.s(86)
+                                        Layout.preferredHeight: root.s(34)
+                                        radius: root.s(7)
+                                        color: wBox2.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
+                                        border.color: manualInput.activeFocus
+                                            ? (wBox2.isActive ? root.base : root.blue)
+                                            : (wBox2.isActive ? Qt.alpha(root.base, 0.3) : root.surface2)
+                                        border.width: 1
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        TextInput {
+                                            id: manualInput
+                                            anchors.fill: parent; anchors.margins: root.s(9)
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            font.family: "JetBrains Mono"; font.pixelSize: root.s(11)
+                                            color: wBox2.isActive ? root.base : root.text
+                                            clip: true; selectByMouse: true
+                                            onTextChanged: weatherTabRoot.manualFields[modelData.ref] = text
+                                            onAccepted: weatherTabRoot.addManualPlace()
+                                            Text {
+                                                text: modelData.ph
+                                                color: wBox2.isActive ? Qt.alpha(root.base, 0.5) : root.subtext0
+                                                visible: !parent.text && !parent.activeFocus; font: parent.font
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+                                        }
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: root.s(60); Layout.preferredHeight: root.s(34)
+                                    radius: root.s(7)
+                                    color: addMa.containsMouse
+                                        ? (wBox2.isActive ? Qt.alpha(root.base, 0.3) : Qt.alpha(root.blue, 0.25))
+                                        : (wBox2.isActive ? Qt.alpha(root.base, 0.15) : root.surface1)
+                                    border.color: wBox2.isActive ? Qt.alpha(root.base, 0.3) : root.surface2
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+                                    Text {
+                                        anchors.centerIn: parent; text: "Add"
+                                        font.family: "Inter"; font.weight: Font.Medium; font.pixelSize: root.s(11)
+                                        color: wBox2.isActive ? root.base : root.text
+                                    }
+                                    MouseArea {
+                                        id: addMa
+                                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: weatherTabRoot.addManualPlace()
                                     }
                                 }
                             }

@@ -18,10 +18,14 @@ daily_cache_file="${cache_dir}/daily_weather_cache.json"
 next_day_cache_file="${cache_dir}/next_day_precache.json"
 ENV_FILE="$(dirname "$0")/.env"
 
-# API Settings
-# Load environment variables silently
+# Settings written by the settings panel. Sourced rather than fed through
+# `export $(... | xargs)`: place names carry spaces and commas ("Kadıköy,
+# İstanbul") and xargs splits those into bogus operands, so the name arrived
+# truncated and export complained on stderr for every remaining word.
 if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | xargs)
+    set -a
+    source "$ENV_FILE"
+    set +a
 fi
 
 # Open-Meteo needs no API key, only a coordinate. WEATHER_LAT/WEATHER_LON come
@@ -223,7 +227,10 @@ elif [[ "$1" == "--hex" ]]; then
     cat "$json_file" | jq -r '.forecast[0].hex'
 
 elif [[ "$1" == "--current-icon" ]]; then
-    icon=$(cat "$json_file" | jq -r '.current_icon // empty')
+    # A missing cache is the normal first read after the location changes --
+    # the panel wipes the cache so the old city cannot linger -- so the probe
+    # stays quiet and get_data below is what actually reports trouble.
+    icon=$(cat "$json_file" 2>/dev/null | jq -r '.current_icon // empty')
     if [[ -z "$icon" || "$icon" == "null" ]]; then 
         get_data
         icon=$(cat "$json_file" | jq -r '.current_icon')
@@ -231,7 +238,7 @@ elif [[ "$1" == "--current-icon" ]]; then
     echo "$icon"
 
 elif [[ "$1" == "--current-temp" ]]; then 
-    t=$(cat "$json_file" | jq -r '.current_temp // empty')
+    t=$(cat "$json_file" 2>/dev/null | jq -r '.current_temp // empty')
     if [[ -z "$t" || "$t" == "null" ]]; then 
         get_data
         t=$(cat "$json_file" | jq -r '.current_temp')
@@ -239,7 +246,7 @@ elif [[ "$1" == "--current-temp" ]]; then
     echo "${t}${UNIT_SYM}"
 
 elif [[ "$1" == "--current-hex" ]]; then
-    hex=$(cat "$json_file" | jq -r '.current_hex // empty')
+    hex=$(cat "$json_file" 2>/dev/null | jq -r '.current_hex // empty')
     if [[ -z "$hex" || "$hex" == "null" ]]; then 
         get_data
         hex=$(cat "$json_file" | jq -r '.current_hex')

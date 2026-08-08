@@ -91,8 +91,19 @@ Item {
     property string kbOptions: "grp:alt_shift_toggle"
 
     property string weatherUnit: "metric"
-    property string weatherApiKey: ""
-    property string weatherCityId: ""
+
+    // Open-Meteo takes a coordinate, not a city id, so a location is a name for
+    // the panel plus the pair the forecast is actually fetched with. The saved
+    // list lives in settings.json; these three live in calendar/.env because
+    // weather.sh reads that file directly.
+    property string weatherPlace: "İstanbul"
+    property string weatherLat: "41.0138"
+    property string weatherLon: "28.9497"
+    property var weatherPlaces: [
+        { name: "İstanbul", lat: "41.0138", lon: "28.9497" },
+        { name: "Ankara",   lat: "39.9199", lon: "32.8543" },
+        { name: "İzmir",    lat: "38.4192", lon: "27.1287" }
+    ]
 
     property var keybindsData: []
     signal keybindsLoaded()
@@ -125,14 +136,84 @@ Item {
 
     function saveWeatherConfig() {
         let envs = {
-            "OPENWEATHER_KEY": config.weatherApiKey,
-            "OPENWEATHER_CITY_ID": config.weatherCityId,
-            "OPENWEATHER_UNIT": config.weatherUnit
+            "WEATHER_PLACE": config.weatherPlace,
+            "WEATHER_LAT": config.weatherLat,
+            "WEATHER_LON": config.weatherLon,
+            "WEATHER_UNIT": config.weatherUnit
         };
-        
+
         config.updateEnvBulk(config.weatherEnvPath, envs);
+        config.setSetting("weatherPlaces", config.weatherPlaces);
+        // The cache holds a forecast for the old coordinate, so it has to go or
+        // the bar keeps showing the previous city until the cache expires.
         sh(`rm -rf "${paths.getCacheDir('weather')}"`);
-        sh("notify-send 'Weather' 'API configuration saved successfully!'");
+        let safeName = config.weatherPlace.replace(/'/g, "'\\''");
+        sh(`notify-send 'Weather' 'Location set to ${safeName}'`);
+    }
+
+    // --- Saved location list -------------------------------------------------
+    // Coordinates are the identity here, not the name: two entries can be typed
+    // differently and mean the same place, and re-adding one should re-select it
+    // rather than grow a duplicate.
+    function weatherPlaceIndex(lat, lon) {
+        return config.weatherPlaces.findIndex(p => p.lat === lat && p.lon === lon);
+    }
+
+    function selectWeatherPlace(index) {
+        if (index < 0 || index >= config.weatherPlaces.length) return;
+        let p = config.weatherPlaces[index];
+        config.weatherPlace = p.name;
+        config.weatherLat = p.lat;
+        config.weatherLon = p.lon;
+        config.saveWeatherConfig();
+    }
+
+    function addWeatherPlace(name, lat, lon) {
+        if (!name || !lat || !lon) return;
+        let existing = config.weatherPlaceIndex(lat, lon);
+        if (existing >= 0) { config.selectWeatherPlace(existing); return; }
+        let places = config.weatherPlaces.slice();
+        places.push({ name: name, lat: lat, lon: lon });
+        config.weatherPlaces = places;
+        config.selectWeatherPlace(places.length - 1);
+    }
+
+    // .env can also be edited by hand, and a coordinate that is live but absent
+    // from the list leaves the box showing a place the list cannot offer back
+    // once something else is picked. Adopting it on load keeps the two in step.
+    // Both readers are asynchronous, so this waits for the pair: running it
+    // after only envReader would adopt into the default list and then have
+    // settingsReader replace it.
+    property bool envLoaded: false
+    property bool settingsLoaded: false
+
+    function maybeAdoptCurrentPlace() {
+        if (!config.envLoaded || !config.settingsLoaded) return;
+        if (config.weatherLat === "" || config.weatherLon === "") return;
+        if (config.weatherPlaceIndex(config.weatherLat, config.weatherLon) >= 0) return;
+        let places = config.weatherPlaces.slice();
+        places.unshift({
+            name: config.weatherPlace !== "" ? config.weatherPlace
+                                             : config.weatherLat + ", " + config.weatherLon,
+            lat: config.weatherLat,
+            lon: config.weatherLon
+        });
+        config.weatherPlaces = places;
+        config.setSetting("weatherPlaces", places);
+    }
+
+    function removeWeatherPlace(index) {
+        // Never empty the list: an empty selection box would leave no way back
+        // to a working coordinate from the panel.
+        if (config.weatherPlaces.length <= 1) return;
+        if (index < 0 || index >= config.weatherPlaces.length) return;
+        let wasSelected = config.weatherPlaces[index].lat === config.weatherLat
+                       && config.weatherPlaces[index].lon === config.weatherLon;
+        let places = config.weatherPlaces.slice();
+        places.splice(index, 1);
+        config.weatherPlaces = places;
+        if (wasSelected) config.selectWeatherPlace(0);
+        else config.setSetting("weatherPlaces", places);
     }
 
     function saveAllKeybinds(bindsArray) {
@@ -348,11 +429,16 @@ Item {
                         let val = parts.slice(1).join("=").replace(/^['"]|['"]$/g, '').trim();
                         config.rawEnvs[key] = val;
                         
-                        if (key === "OPENWEATHER_KEY") config.weatherApiKey = val;
-                        else if (key === "OPENWEATHER_CITY_ID") config.weatherCityId = val;
-                        else if (key === "OPENWEATHER_UNIT") config.weatherUnit = val;
+                        if (key === "WEATHER_PLACE") config.weatherPlace = val;
+                        else if (key === "WEATHER_LAT") config.weatherLat = val;
+                        else if (key === "WEATHER_LON") config.weatherLon = val;
+                        // OPENWEATHER_UNIT is still read so an .env written
+                        // before the Open-Meteo switch keeps its unit.
+                        else if (key === "WEATHER_UNIT" || key === "OPENWEATHER_UNIT") config.weatherUnit = val;
                     }
                 }
+                config.envLoaded = true;
+                config.maybeAdoptCurrentPlace();
             }
         }
     }
@@ -374,6 +460,10 @@ Item {
                         if (config.rawSettings.wallpaperDir !== undefined) config.wallpaperDir = config.rawSettings.wallpaperDir;
                         if (config.rawSettings.language !== undefined && config.rawSettings.language !== "") config.language = config.rawSettings.language;
                         if (config.rawSettings.kbOptions !== undefined) config.kbOptions = config.rawSettings.kbOptions;
+                        if (config.rawSettings.weatherPlaces !== undefined
+                            && config.rawSettings.weatherPlaces.length > 0) {
+                            config.weatherPlaces = config.rawSettings.weatherPlaces;
+                        }
                         if (config.rawSettings.workspaceCount !== undefined) {
                             config.workspaceCount = config.rawSettings.workspaceCount;
                             config.initialWorkspaceCount = config.rawSettings.workspaceCount; 
@@ -420,6 +510,8 @@ Item {
                 }
                 config.keybindsLoaded();
                 config.startupLoaded();
+                config.settingsLoaded = true;
+                config.maybeAdoptCurrentPlace();
                 config.dataReady = true;
             }
         }
