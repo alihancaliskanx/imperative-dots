@@ -103,7 +103,7 @@ Variants {
 
             Process {
                 id: widgetWatcher
-                command: ["bash", "-c", "while [ ! -f " + paths.runDir + "/current_widget ]; do sleep 1; done; inotifywait -qq -e modify,close_write " + paths.runDir + "/current_widget"]
+                command: ["bash", "-c", "while [ ! -f " + paths.runDir + "/current_widget ]; do sleep 1; done; inotifywait -qq -e modify,close_write " + paths.runDir + "/current_widget 2>/dev/null || sleep 5"]
                 running: true
                 onExited: {
                     widgetPoller.running = false;
@@ -184,7 +184,7 @@ Variants {
 
             Process {
                 id: settingsWatcher
-                command: ["bash", "-c", "while [ ! -f ~/.config/hypr/settings.json ]; do sleep 1; done; inotifywait -qq -e modify,close_write ~/.config/hypr/settings.json"]
+                command: ["bash", "-c", "while [ ! -f ~/.config/hypr/settings.json ]; do sleep 1; done; inotifywait -qq -e modify,close_write ~/.config/hypr/settings.json 2>/dev/null || sleep 5"]
                 running: true
                 stdout: StdioCollector {
                     onStreamFinished: {
@@ -333,7 +333,7 @@ Variants {
             Process {
                 id: wsWatcher
                 running: true
-                command: ["bash", "-c", "inotifywait -qq -e close_write,modify " + paths.getRunDir("workspaces") + "/workspaces.json"]
+                command: ["bash", "-c", "inotifywait -qq -e close_write,modify " + paths.getRunDir("workspaces") + "/workspaces.json 2>/dev/null || sleep 5"]
                 onExited: {
                     wsReader.running = false;
                     wsReader.running = true;

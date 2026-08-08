@@ -270,7 +270,7 @@ PanelWindow {
 
     Process {
         id: settingsWatcher
-        command: ["bash", "-c", "while [ ! -f ~/.config/hypr/settings.json ]; do sleep 1; done; inotifywait -qq -e modify,close_write ~/.config/hypr/settings.json"]
+        command: ["bash", "-c", "while [ ! -f ~/.config/hypr/settings.json ]; do sleep 1; done; inotifywait -qq -e modify,close_write ~/.config/hypr/settings.json 2>/dev/null || sleep 5"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
