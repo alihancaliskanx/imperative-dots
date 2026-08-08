@@ -158,16 +158,19 @@ Item {
     property string sysGPU: "Loading..."
     property string faceIconPath: ""
     property string sysUptime: "Loading..."
+    property string sysOSId: ""
+    property string sysOSLike: ""
 
     Process {
         id: sysInfoProc
         running: true
         command: [
             "bash", "-c",
-            "CACHE=\"" + paths.getCacheDir("guide") + "/sysinfo.txt\"; " +
+            "CACHE=\"" + paths.getCacheDir("guide") + "/sysinfo2.txt\"; " +
             "if [ ! -f \"$CACHE\" ]; then " +
+            "  ID=\"\"; ID_LIKE=\"\"; [ -r /etc/os-release ] && . /etc/os-release; " +
             "  ICON=\"\"; if [ -f ~/.face.icon ]; then ICON=$(readlink -f ~/.face.icon); elif [ -f ~/.face ]; then ICON=$(readlink -f ~/.face); fi; " +
-            "  echo \"$(whoami)|$(hostname)|$(uname -r)|$(cat /etc/os-release | grep '^PRETTY_NAME=' | cut -d'=' -f2 | tr -d '\\\"')|$(grep -m1 'model name' /proc/cpuinfo | cut -d':' -f2 | xargs)|$(lspci 2>/dev/null | grep -iE 'vga|3d|display' | tail -n1 | cut -d':' -f3 | xargs)|$ICON\" > \"$CACHE\"; " +
+            "  echo \"$(whoami)|$(hostname)|$(uname -r)|$(cat /etc/os-release | grep '^PRETTY_NAME=' | cut -d'=' -f2 | tr -d '\\\"')|$(grep -m1 'model name' /proc/cpuinfo | cut -d':' -f2 | xargs)|$(lspci 2>/dev/null | grep -iE 'vga|3d|display' | tail -n1 | cut -d':' -f3 | xargs)|$ICON|$ID|$ID_LIKE\" > \"$CACHE\"; " +
             "fi; " +
             "cat \"$CACHE\""
         ]
@@ -183,9 +186,27 @@ Item {
                     root.sysCPU = parts[4];
                     root.sysGPU = parts[5] ? parts[5] : "Integrated Graphics";
                     if (parts.length >= 7 && parts[6].trim() !== "") root.faceIconPath = parts[6].trim();
+                    if (parts.length >= 8) root.sysOSId = parts[7].trim();
+                    if (parts.length >= 9) root.sysOSLike = parts[8].trim();
                 }
             }
         }
+    }
+
+    // The logo beside the OS name was hardcoded to NixOS, so this machine
+    // announced itself as CachyOS under a NixOS mark. os-release decides it now.
+    // ID_LIKE is the second try on purpose: a derivative with no logo of its own
+    // should show what it is built on rather than a generic penguin. Only glyphs
+    // already proven to render in this font are listed; anything else gets Tux.
+    function distroGlyph(id, like) {
+        var map = { "arch": "󰣇", "cachyos": "󰣇", "nixos": "" };
+        var key = (id || "").toLowerCase();
+        if (map[key] !== undefined) return map[key];
+        var likes = (like || "").toLowerCase().split(" ");
+        for (var i = 0; i < likes.length; i++) {
+            if (map[likes[i]] !== undefined) return map[likes[i]];
+        }
+        return "";
     }
 
     // -------------------------------------------------------------------------
@@ -842,7 +863,7 @@ Item {
                                     spacing: root.s(15)
                                     RowLayout { 
                                         spacing: root.s(6)
-                                        Text { text: ""; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(16); color: root.blue } 
+                                        Text { text: root.distroGlyph(root.sysOSId, root.sysOSLike); font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(16); color: root.blue } 
                                         Text { text: root.sysOS; font.family: "JetBrains Mono"; font.weight: Font.Medium; font.pixelSize: root.s(12); color: root.subtext0 } 
                                     }
                                     RowLayout { 

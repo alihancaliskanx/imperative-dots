@@ -169,8 +169,10 @@ Scope {
                     Rectangle {
                         anchors.fill: parent
                         radius: 12
-                        color: card.current ? Qt.rgba(c.primary.r, c.primary.g, c.primary.b, 0.18) : "transparent"
-                        border.color: card.current ? c.primary : "transparent"
+                        // c.primary is empty until matugen's colours are read, and
+                        // reading .r off it before then warns on every start.
+                        color: card.current && c.primary ? Qt.rgba(c.primary.r, c.primary.g, c.primary.b, 0.18) : "transparent"
+                        border.color: card.current && c.primary ? c.primary : "transparent"
                         border.width: 2
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
