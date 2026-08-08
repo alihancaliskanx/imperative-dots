@@ -184,7 +184,7 @@ Variants {
 
             Process {
                 id: settingsWatcher
-                command: ["bash", "-c", "while [ ! -f ~/.config/hypr/settings.json ]; do sleep 1; done; inotifywait -qq -e modify,close_write ~/.config/hypr/settings.json 2>/dev/null || sleep 5"]
+                command: ["bash", "-c", "while [ ! -f ~/.config/hypr/settings.json ]; do sleep 1; done; inotifywait -qq -e close_write,moved_to ~/.config/hypr 2>/dev/null || sleep 5"]
                 running: true
                 stdout: StdioCollector {
                     onStreamFinished: {
@@ -333,7 +333,7 @@ Variants {
             Process {
                 id: wsWatcher
                 running: true
-                command: ["bash", "-c", "inotifywait -qq -e close_write,modify " + paths.getRunDir("workspaces") + "/workspaces.json 2>/dev/null || sleep 5"]
+                command: ["bash", "-c", "inotifywait -qq -e close_write,moved_to " + paths.getRunDir("workspaces") + " 2>/dev/null || sleep 5"]
                 onExited: {
                     wsReader.running = false;
                     wsReader.running = true;
