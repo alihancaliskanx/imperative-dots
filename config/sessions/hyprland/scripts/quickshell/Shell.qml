@@ -1,6 +1,7 @@
 //@ pragma UseQApplication
 import QtQuick
 import Quickshell
+import "switcher"
 
 ShellRoot {
     Connections {
@@ -12,4 +13,5 @@ ShellRoot {
     Main {}
     TopBar {}
     Floating {}
+    WindowSwitcher {}
 }
