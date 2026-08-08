@@ -84,7 +84,7 @@ Item {
     property real uiScale: 1.0
     property bool openGuideAtStartup: true
     property bool topbarHelpIcon: true
-    property int workspaceCount: 8
+    property int workspaceCount: 9
     property int initialWorkspaceCount: 8
     property string wallpaperDir: Quickshell.env("WALLPAPER_DIR") || (homeDir + "/Pictures/Wallpapers")
     property string language: ""
