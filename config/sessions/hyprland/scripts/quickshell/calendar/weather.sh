@@ -4,6 +4,7 @@
 # CACHING & MIGRATION
 # -----------------------------------------------------------------------------
 source "$(dirname "${BASH_SOURCE[0]}")/../../caching.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../net-env.sh"
 qs_ensure_cache "weather"
 
 # Force standard C locale for number formatting and date parsing (fixes printf and date command issues on varying OS locales)

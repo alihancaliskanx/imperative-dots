@@ -4,6 +4,7 @@
 # CACHING
 # -----------------------------------------------------------------------------
 source "$(dirname "${BASH_SOURCE[0]}")/../../caching.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/../../net-env.sh"
 qs_ensure_cache "music"
 
 TMP_DIR="$QS_RUN_MUSIC/covers"

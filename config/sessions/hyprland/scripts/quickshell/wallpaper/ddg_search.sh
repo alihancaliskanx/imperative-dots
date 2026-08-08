@@ -5,6 +5,7 @@ SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 # Import dynamic caching system
 source "$SCRIPT_DIR/../../caching.sh"
+source "$SCRIPT_DIR/../../net-env.sh"
 qs_ensure_cache "wallpaper_picker"
 
 CACHE_DIR="$QS_CACHE_WALLPAPER_PICKER"
