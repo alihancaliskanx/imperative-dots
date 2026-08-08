@@ -184,12 +184,11 @@ if [ -f "$CACHE_DIR/rec_pid" ]; then
     if [ -f "$FINAL_FILE" ]; then
         (
             ACTION=$(notify-send -a "Screen Recorder" -i "$FINAL_FILE" -A "default=Open Folder" "⏺ Recording Saved" "File: $(basename "$FINAL_FILE")\nFolder: $RECORD_DIR")
+            # xdg-open resolves inode/directory through mimeapps.list, which
+            # names dolphin. Hardcoding a file manager here meant this one
+            # notification could disagree with the rest of the desktop.
             if [ "$ACTION" = "default" ]; then
-                if command -v nautilus &> /dev/null; then
-                    nautilus "$RECORD_DIR"
-                else
-                    xdg-open "$RECORD_DIR"
-                fi
+                xdg-open "$RECORD_DIR"
             fi
         ) &
     else
@@ -300,11 +299,7 @@ if [ "$FULL_MODE" = true ] || [ -n "$GEOMETRY" ]; then
         (
             ACTION=$(notify-send -a "Screenshot" -i "$FILENAME" -A "default=Open Folder" "Screenshot Saved" "File: Screenshot_$time.png\nFolder: $SAVE_DIR")
             if [ "$ACTION" = "default" ]; then
-                if command -v nautilus &> /dev/null; then
-                    nautilus "$SAVE_DIR"
-                else
-                    xdg-open "$SAVE_DIR"
-                fi
+                xdg-open "$SAVE_DIR"
             fi
         ) &
     fi
