@@ -117,12 +117,25 @@ PanelWindow {
         if (widgetCache[name]) return;
         let t = getLayout(name);
         if (!t || !t.comp) return;
-        let obj = t.comp.createObject(preloaderContainer, {
-            "notifModel": masterWindow.notifModel,
-            "liveNotifs": masterWindow.liveNotifs,
-            "visible": false
-        });
-        if (obj) widgetCache[name] = obj;
+
+        // t.comp is a file path string (see WindowRegistry.js), not a Component.
+        // StackView.replace() further down takes a path happily, which is why the
+        // widgets open at all; here it needs turning into a Component first, or
+        // every preload dies on "createObject is not a function".
+        let comp = Qt.createComponent(Qt.resolvedUrl(t.comp));
+        if (comp.status !== Component.Ready) {
+            if (comp.status === Component.Error)
+                console.warn("preload " + name + ": " + comp.errorString());
+            return;
+        }
+
+        let obj = comp.createObject(preloaderContainer, { "visible": false });
+        if (!obj) return;
+        // Only the notification widget has these; assigning them blindly is what
+        // filled the log with "Cannot assign to non-existent property".
+        if (obj.notifModel !== undefined) obj.notifModel = masterWindow.notifModel;
+        if (obj.liveNotifs !== undefined) obj.liveNotifs = masterWindow.liveNotifs;
+        widgetCache[name] = obj;
     }
 
     Component.onCompleted: {
