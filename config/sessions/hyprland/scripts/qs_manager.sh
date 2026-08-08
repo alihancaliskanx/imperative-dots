@@ -9,18 +9,40 @@ SHELL_QML_PATH="$SCRIPTS_DIR/Shell.qml"
 # -----------------------------------------------------------------------------
 # FAST PATH: WORKSPACE SWITCHING
 # Must be first — before any sourcing, caching, or pgrep.
+#
+# The keybinds and the bar's workspace pills no longer come through here; they
+# use Hyprland's own dispatcher, which costs no process at all. This is kept for
+# anything calling the script by hand.
+#
+# The `quickshell ipc call main handleCommand close` that used to run first is
+# gone. It cost a measured 21ms and it blocked the dispatch behind it, so the
+# slide only began ~26ms after the keypress. Main.qml now closes an open popup
+# by watching Hyprland's focused workspace, which needs nobody to tell it.
 # -----------------------------------------------------------------------------
 ACTION="$1"
 TARGET="$2"
 SUBTARGET="$3"
 
 if [[ "$ACTION" =~ ^[0-9]+$ ]]; then
-    # Send IPC command directly to Main.qml via Quickshell's native IPC handler
-    quickshell -p "$SHELL_QML_PATH" ipc call main handleCommand "close" "" "" >/dev/null 2>&1
-
     CMD="workspace $ACTION"
     [[ "$TARGET" == "move" ]] && CMD="movetoworkspace $ACTION"
     hyprctl --batch "dispatch $CMD" >/dev/null 2>&1
+    exit 0
+fi
+
+# -----------------------------------------------------------------------------
+# FAST PATH: PLAIN WIDGET TOGGLES
+#
+# All the scaffolding below exists for two widgets: `network` wants a bluetooth
+# scan started first and `wallpaper` wants its thumbnails prepared. Every other
+# widget just needs the one IPC message -- but they were all paying for the
+# setup anyway. Sourcing caching.sh walks every widget folder (40ms measured)
+# and the `pgrep -f` zombie check adds another 13ms, so Mod+D sat for ~85ms
+# before the launcher appeared. Those two widgets stay on the slow path.
+# -----------------------------------------------------------------------------
+if [[ "$ACTION" == "toggle" || "$ACTION" == "open" ]] \
+   && [[ "$TARGET" != "network" && "$TARGET" != "wallpaper" ]]; then
+    quickshell -p "$SHELL_QML_PATH" ipc call main handleCommand "$ACTION" "$TARGET" "$SUBTARGET" >/dev/null 2>&1
     exit 0
 fi
 
@@ -143,10 +165,34 @@ handle_wallpaper_prep() {
     ) </dev/null >/dev/null 2>&1 &
 }
 
+# Stop whatever scan the last open left behind.
+#
+# The scan is a pipeline, and `$!` after a pipeline is its *last* command --
+# so recording it caught bluetoothctl but not the `{ echo; sleep infinity; }`
+# feeding it, which stayed alive with nothing left pointing at it once the pid
+# file was removed. Every open stranded one more: five were found still running
+# after four hours, all appending to bt_scan.log (885 KB by then).
+#
+# `set -m` below gives the pipeline its own process group, so the negative pid
+# here takes the whole thing down rather than half of it.
+bt_scan_stop() {
+    [ -f "$BT_PID_FILE" ] || return 0
+    local pgid
+    read -r pgid < "$BT_PID_FILE"
+    [ -n "$pgid" ] && kill -- -"$pgid" 2>/dev/null
+    rm -f "$BT_PID_FILE"
+    return 0
+}
+
 handle_network_prep() {
+    bt_scan_stop
+
     echo "" > "$BT_SCAN_LOG"
-    { echo "scan on"; sleep infinity; } | stdbuf -oL bluetoothctl > "$BT_SCAN_LOG" 2>&1 &
+    set -m
+    { { echo "scan on"; sleep infinity; } | stdbuf -oL bluetoothctl; } > "$BT_SCAN_LOG" 2>&1 &
     echo $! > "$BT_PID_FILE"
+    set +m
+
     (nmcli device wifi rescan) >/dev/null 2>&1 &
 }
 
@@ -156,10 +202,7 @@ handle_network_prep() {
 if [[ "$ACTION" == "close" ]]; then
     quickshell -p "$SHELL_QML_PATH" ipc call main handleCommand "close" "" "" >/dev/null 2>&1
     if [[ "$TARGET" == "network" || "$TARGET" == "all" || -z "$TARGET" ]]; then
-        if [ -f "$BT_PID_FILE" ]; then
-            kill $(cat "$BT_PID_FILE") 2>/dev/null
-            rm -f "$BT_PID_FILE"
-        fi
+        bt_scan_stop
         (bluetoothctl scan off > /dev/null 2>&1) &
     fi
     exit 0

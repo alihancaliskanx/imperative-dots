@@ -4,6 +4,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Services.SystemTray
 
 Variants {
@@ -892,7 +893,9 @@ Variants {
                                     id: wsPillMouse
                                     hoverEnabled: true
                                     anchors.fill: parent
-                                    onClicked: Quickshell.execDetached(["bash", "-c", "~/.config/hypr/scripts/qs_manager.sh " + wsName])
+                                    // Was a detached bash -> qs_manager.sh -> quickshell ipc -> hyprctl
+                                    // chain; Hyprland's own IPC socket is already open in this process.
+                                    onClicked: Hyprland.dispatch("workspace " + wsName)
                                 }
                             }
                         }

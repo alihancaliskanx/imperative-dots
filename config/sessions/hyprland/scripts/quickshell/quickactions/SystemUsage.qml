@@ -74,8 +74,25 @@ Item {
         from: 0; to: Math.PI * 2; duration: 1800; loops: Animation.Infinite; running: root.widgetVisible
     }
 
-    Component.onCompleted: SysData.subscribe()
-    Component.onDestruction: SysData.unsubscribe()
+    // Floating.qml builds every tab module at shell startup, even though the
+    // sidebar they live in starts hidden -- so subscribing on completion kept
+    // SysData's 2s poll, and the ten-odd processes each sample forks, running
+    // forever for a panel nobody had opened. widgetVisible already gates the
+    // wave animation for exactly this reason; the subscription follows it now.
+    // The flag keeps SysData's refcount balanced across repeated flips.
+    property bool sysSubscribed: false
+
+    function syncSysSubscription() {
+        if (root.widgetVisible === root.sysSubscribed) return;
+        root.sysSubscribed = root.widgetVisible;
+        if (root.sysSubscribed) SysData.subscribe();
+        else SysData.unsubscribe();
+    }
+
+    onWidgetVisibleChanged: syncSysSubscription()
+
+    Component.onCompleted: syncSysSubscription()
+    Component.onDestruction: if (root.sysSubscribed) SysData.unsubscribe()
 
     // --- ANIMATED DATA STATE BINDINGS ---
     // Smooths out raw SysData to drive both the visual wave and the dynamic text counters in constant 800ms time

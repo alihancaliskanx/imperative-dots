@@ -24,11 +24,15 @@ cleanup() {
 trap cleanup EXIT SIGTERM SIGINT
 
 # --- Special Cleanup for Network/Bluetooth ---
-# The network toggle starts a background bluetooth scan that must be killed explicitly.
-BT_PID_FILE="$QS_RUN_WORKSPACES/bt_scan_pid"
+# The network toggle starts a background bluetooth scan that must be killed
+# explicitly. qs_manager.sh writes that pid to $QS_RUN_DIR, not to the
+# per-widget run dir this used to look in, so the block below had never once
+# found the file it was meant to clean up. The pid names a process group.
+BT_PID_FILE="$QS_RUN_DIR/bt_scan_pid"
 
 if [ -f "$BT_PID_FILE" ]; then
-    kill $(cat "$BT_PID_FILE") 2>/dev/null
+    read -r bt_pgid < "$BT_PID_FILE"
+    [ -n "$bt_pgid" ] && kill -- -"$bt_pgid" 2>/dev/null
     rm -f "$BT_PID_FILE"
 fi
 
@@ -45,17 +49,20 @@ if ! [[ "$SEQ_END" =~ ^[0-9]+$ ]]; then
 fi
 
 print_workspaces() {
-    # Get raw data with a timeout fallback
-    spaces=$(timeout 2 hyprctl workspaces -j 2>/dev/null)
-    active=$(timeout 2 hyprctl activeworkspace -j 2>/dev/null | jq '.id')
+    # One hyprctl and one jq instead of two of each. --batch returns the two
+    # documents back to back and `jq -s` reads them as a two element array.
+    # This runs on every switch, so those spawns were showing up as bar lag.
+    raw=$(timeout 2 hyprctl -j --batch "workspaces;activeworkspace" 2>/dev/null)
 
     # Failsafe if hyprctl crashes to prevent jq from outputting errors
-    if [ -z "$spaces" ] || [ -z "$active" ]; then return; fi
+    if [ -z "$raw" ]; then return; fi
 
     # Generate the JSON and write it atomically to prevent UI flickering
-    echo "$spaces" | jq --unbuffered --argjson a "$active" --arg end "$SEQ_END" -c '
+    printf '%s' "$raw" | jq -s --arg end "$SEQ_END" -c '
+        .[0] as $list | (.[1].id // -1) as $a
+        |
         # Create a map of workspace ID -> workspace data for easy lookup
-        (map( { (.id|tostring): . } ) | add) as $s
+        (($list | map( { (.id|tostring): . } ) | add) // {}) as $s
         |
         # Iterate from 1 to SEQ_END
         [range(1; ($end|tonumber) + 1)] | map(
@@ -74,8 +81,8 @@ print_workspaces() {
                 tooltip: $win
             }
         )
-    ' > "$QS_RUN_WORKSPACES/workspaces.tmp"
-    
+    ' > "$QS_RUN_WORKSPACES/workspaces.tmp" || return
+
     mv "$QS_RUN_WORKSPACES/workspaces.tmp" "$QS_RUN_WORKSPACES/workspaces.json"
 }
 
@@ -91,11 +98,16 @@ while true; do
         case "$line" in
             workspace*|focusedmon*|activewindow*|createwindow*|closewindow*|movewindow*|destroyworkspace*)
                 
-                # -> THE FIX <-
                 # Hyprland emits HUNDREDS of events a second when you move/resize windows.
-                # This reads and discards all subsequent events arriving within a 50ms window.
-                # It bundles the storm into a single UI update, completely preventing CPU clogging!
-                while read -t 0.05 -r extra_line; do
+                # This reads and discards subsequent events until the storm goes quiet,
+                # bundling it into a single UI update instead of clogging the CPU.
+                #
+                # The window used to be 50ms, but `read -t` waits the whole timeout when
+                # nothing more arrives -- and after a plain workspace switch nothing does.
+                # So every switch paid the full 50ms before the bar was allowed to redraw,
+                # which is most of a slide that finishes in under 150ms. A storm's events
+                # arrive microseconds apart, so 10ms still bundles them just as tightly.
+                while read -t 0.01 -r extra_line; do
                     continue
                 done
 

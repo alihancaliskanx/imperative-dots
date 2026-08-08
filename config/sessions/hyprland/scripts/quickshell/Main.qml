@@ -4,6 +4,7 @@ import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import "WindowRegistry.js" as Registry
 
@@ -154,6 +155,20 @@ PanelWindow {
     }
 
     // =========================================================
+    // --- CLOSE ON WORKSPACE CHANGE
+    // =========================================================
+    // The workspace keybinds used to run a script that told us to close before
+    // it let Hyprland switch, which cost every switch ~21ms of blocking IPC.
+    // Watching the compositor's own state does the same job for free, and it
+    // also covers switches we were never told about (Mod+Ctrl+arrows, the
+    // scroll binds, another tool calling hyprctl).
+    Connections {
+        target: Hyprland
+
+        function onFocusedWorkspaceChanged() {
+            if (masterWindow.currentActive !== "hidden") masterWindow.switchWidget("hidden", "");
+        }
+    }
 
     property string currentActive: "hidden"
 
