@@ -62,6 +62,20 @@ output_path = "~/.config/gtk-3.0/matugen.css"
 input_path = "~/.config/matugen/templates/gtk4-adw.css.template"
 output_path = "~/.config/gtk-4.0/matugen.css"
 
+# The qt5ct/qt6ct palettes below only reach Qt apps that use the platform
+# theme's palette. KF6 applications do not: dolphin reads kdeglobals and
+# ignores qt6ct entirely (KDE_COLOR_SCHEME_PATH does not move it either), so
+# this is the entry that actually colours it from the wallpaper.
+#
+# ~/.config/kdeglobals is a symlink to the dotfiles repo under the other rice,
+# and matugen writes *through* symlinks -- so link.sh unlinks its `kdeglobals`
+# package before this rice runs, and deletes what is generated here on the way
+# back out. Adding an output that lands on a tracked path without that pairing
+# would overwrite the file in the repo instead of shadowing it.
+[templates.kdeglobals]
+input_path = "~/.config/matugen/templates/kdeglobals.template"
+output_path = "~/.config/kdeglobals"
+
 [templates.qt5ct]
 input_path = "~/.config/matugen/templates/qtct.conf.template"
 output_path = "~/.config/qt5ct/colors/matugen.conf"
