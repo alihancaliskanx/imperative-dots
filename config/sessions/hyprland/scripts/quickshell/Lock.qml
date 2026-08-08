@@ -36,7 +36,10 @@ ShellRoot {
     // Session Settings (Changed from Settings to QtObject to fix the Qt 6.11 initialization error)
     QtObject {
         id: lockSettings
-        property bool hidePassword: false
+        // Masked from the first keystroke. This object is recreated on every
+        // lock, so a toggle flipped in the panel only lasts for that session --
+        // the default is what is actually seen at the screen.
+        property bool hidePassword: true
         property int revealDuration: 300
     }
 
