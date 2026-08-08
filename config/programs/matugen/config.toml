@@ -41,6 +41,27 @@ output_path = "~/.config/swayosd/style.css"
 input_path = "~/.config/matugen/templates/gtk.css.template"
 output_path = "~/.cache/matugen/colors-gtk.css"
 
+# The cache copy above is all upstream generated; on NixOS home-manager pulled it
+# into gtk.css with an extraCss import. Arch has no equivalent, so nothing ever
+# read it and every GTK app ignored the wallpaper.
+#
+# The colours go beside the files GTK actually reads instead. Not into gtk.css
+# itself: that file is the static rainynight theme and defines window_bg_color
+# and its neighbours from its own palette, so an import at the top -- where CSS
+# wants it -- would lose to them. gtk.css imports this on its last line, after
+# those definitions, which is where it wins.
+[templates.gtk3_local]
+input_path = "~/.config/matugen/templates/gtk.css.template"
+output_path = "~/.config/gtk-3.0/matugen.css"
+
+# GTK4 gets the modern spelling. libadwaita has taken its colours from CSS
+# custom properties since 1.6 and ignores the @define-color names, so on
+# libadwaita 1.9 the old template themed nothing -- measured: a themed gtk.css
+# still left the editor on stock #1d1d20 instead of the wallpaper's #101418.
+[templates.gtk4_local]
+input_path = "~/.config/matugen/templates/gtk4-adw.css.template"
+output_path = "~/.config/gtk-4.0/matugen.css"
+
 [templates.qt5ct]
 input_path = "~/.config/matugen/templates/qtct.conf.template"
 output_path = "~/.config/qt5ct/colors/matugen.conf"
