@@ -62,3 +62,7 @@ input_path = '~/.config/matugen/templates/hyprland.conf.template'
 output_path = '~/.config/hypr/colors.conf'
 
 
+
+[templates.rofi]
+input_path = '~/.config/matugen/templates/rofi-colors.rasi.template'
+output_path = '~/.config/rofi/theme.rasi'
