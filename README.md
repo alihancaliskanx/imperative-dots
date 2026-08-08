@@ -1,36 +1,102 @@
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ilyamiro)
+# imperative-dots — fork
 
-# Big announcement to all of my users! 
-### Starting from 12.05.2026, the version of my dots will remain available for arch on version v1.7.6, since I am working on a very big update - v2.0.0. It will shift the whole paradigm - instead of being invasive into your configs, the shell will actually be a "shell" and be just a quickshell configuration on top of your compositor - that will extend the support onto Niri, MangoWM, and other wayland compositors other than Hyprland. The new update will also make everything much more optimized and efficient and will be out in a span of a month. Thank you!
+A fork of [ilyamiro/nixos-configuration](https://github.com/ilyamiro/nixos-configuration):
+a Hyprland desktop whose entire shell — bar, launcher, notifications, lock
+screen, wallpaper picker, settings — is one [quickshell](https://quickshell.org)
+configuration, themed from the wallpaper by [matugen](https://github.com/InioX/matugen).
 
-
-## Do NOT install it on NixOS. This config has a lot adapting to do, until I introduce flakes.
-## Arch installer now available for everyone. Just run this: 
+This checkout is **not** installed the way upstream installs. It is linked into
+`$HOME` from [my dotfiles](https://github.com/alihancaliskanx/dotfiles) as one
+of two selectable desktops, so switching between this and my own waybar setup is
+a single command and nothing is copied anywhere.
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/ilyamiro/imperative-dots/master/install.sh)"
+cd ~/Documents/Code/dotfiles
+./link.sh                      # menu: 1) Own Dotfiles  2) imperative-dots
+./link.sh rice imperative-dots # or straight to the point
+./link.sh rice own             # and back
 ```
 
-> [!WARNING]
-> DO NOT LAUNCH THIS AS ROOT!
+## Two upstreams, and which one this is
 
-> [!NOTE]
-> This installer sends anonymous non-identifying telemetry that helps me debug problems and track the amount of users
+Upstream keeps the same desktop in two repos:
 
-### You can find all of my wallpapers **[HERE](https://github.com/ilyamiro/shell-wallpapers)**.
+| repo | for | layout |
+|---|---|---|
+| `ilyamiro/nixos-configuration` | NixOS | `config/programs/*`, `config/sessions/*`, thin `.nix` files |
+| `ilyamiro/imperative-dots` | Arch | flat `$HOME` overlay + a 1900-line `install.sh` |
 
-## Previews of my desktop
+**This fork is of the NixOS one**, despite the name — and for linking that is
+the better half. Its `.nix` files do nothing but
+`mkOutOfStoreSymlink`, i.e. exactly what a symlinker does, so the content under
+`config/` is plain, dist-agnostic config. The Arch repo instead *copies* into
+`~/.config`, `sed`s the copies afterwards, and runs a `settings_watcher.sh` that
+rewrites its own `config/*.conf` at runtime — none of which survives being
+managed as a git checkout.
 
----
+The `.nix` files are dead weight here and are skipped by the linker.
 
-![preview1](previews/screenshot1.png)
-![preview2](previews/screenshot2.png)
-![preview3](previews/screenshot3.png)
-![preview4](previews/screenshot4.png)
-![preview5](previews/screenshot5.png)
-![preview6](previews/screenshot6.png)
-![preview7](previews/screenshot7.png)
-![preview8](previews/screenshot8.png)
-![preview9](previews/screenshot9.png)
-![preview10](previews/screenshot10.png)
+## `.linkmap`
 
+The one file this fork adds. Upstream's directories are named for home-manager
+(`config/sessions/hyprland`), not for `$HOME` (`.config/hypr`), so the mapping
+that used to live in the `default.nix` files is written out plainly:
+
+```
+config/sessions/hyprland     .config/hypr
+config/programs/matugen      .config/matugen
+config/programs/cava         .config/cava
+config/programs/kitty        .config/kitty
+config/programs/rofi         .config/rofi
+```
+
+Files only, directory by directory — anything of my own that ends up in those
+directories and is not in this repo stays put. What is deliberately left out
+(neovim, zsh, plymouth, fonts) and why is commented in the file itself.
+
+## What it needs installed
+
+`quickshell` and `matugen` are in Arch `extra`; the rest is mostly repos too:
+
+```bash
+sudo pacman -S quickshell matugen swww rofi cava cliphist jq socat pamixer \
+  brightnessctl acpi iw bluez-utils libnotify lm_sensors bc imagemagick \
+  wl-clipboard fd ripgrep grim slurp satty playerctl go-yq mpvpaper \
+  pavucontrol qt6-multimedia qt6-5compat qt6-websockets qt6-webengine
+yay -S gpu-screen-recorder wl-screenrec networkmanager-dmenu
+```
+
+Upstream's `install.sh` (in the *other* repo) is not used and should not be:
+besides copying over configs, it edits `/etc/pacman.conf`, removes your display
+manager with `pacman -Rns`, runs `chsh`, writes `/etc/sddm.conf.d/`, and ships
+no uninstall path.
+
+## Hyprland only
+
+`hyprctl` is called from 15 files — monitor layout, keyboard layout, workspaces,
+submaps, app launching. Under niri the bar comes up (quickshell talks
+layer-shell, not Hyprland) but those paths are dead. Upstream's announced v2.0.0
+is meant to make the shell compositor-agnostic and add niri; until then this
+desktop is for the Hyprland profile.
+
+## Keeping up with upstream
+
+```bash
+git remote -v
+# origin    git@github.com:alihancaliskanx/imperative-dots.git
+# upstream  https://github.com/ilyamiro/nixos-configuration.git
+
+git fetch upstream && git merge upstream/main   # or whatever the branch is
+```
+
+Local changes belong in normal commits on this fork — that is the whole reason
+it is a fork and not a submodule or a vendored copy. Note that upstream
+restructures directories wholesale from time to time; when a merge moves things,
+`.linkmap` is the one file to re-check, and `./link.sh rice imperative-dots`
+relinks from scratch.
+
+## Credit
+
+All of the desktop is [ilyamiro](https://github.com/ilyamiro)'s work — the
+quickshell configuration, the matugen templates, the Hyprland config. This fork
+adds `.linkmap` and this README, nothing else.

@@ -1,0 +1,26 @@
+# .linkmap — where this repo's directories belong under $HOME.
+#
+# Read by link.sh in the dotfiles repo (./link.sh rice imperative-dots). This
+# tree was laid out for home-manager, which mapped every directory onto
+# ~/.config by hand in a default.nix; the same mapping is written out here so a
+# plain symlinker can do the job without Nix.
+#
+# Format: <path in this repo>  <path under $HOME>.  Blank lines and # ignored.
+# Only files are linked, directory by directory, so anything you drop into the
+# target that is not in this repo survives.
+
+config/sessions/hyprland     .config/hypr
+config/programs/matugen      .config/matugen
+config/programs/cava         .config/cava
+config/programs/kitty        .config/kitty
+config/programs/rofi         .config/rofi
+
+# Deliberately not linked:
+#   config/programs/neovim   the editor is not part of the desktop; matugen
+#                            still writes ~/.config/nvim/matugen_colors.lua
+#   config/programs/zsh      home-manager inlined zsh-init.sh into ~/.zshrc;
+#                            the shell package in the dotfiles repo owns zsh
+#   config/programs/plymouth a boot theme, it belongs in /usr/share, not $HOME
+#   config/programs/swayosd  nothing but a default.nix, no config to link
+#   config/fonts             ttf-jetbrains-mono-nerd covers these from the repos
+#   *.nix                    home-manager glue, meaningless on Arch
