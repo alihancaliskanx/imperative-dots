@@ -20,6 +20,7 @@ Item {
     }
     
     property bool isLayoutDropdownOpen: false
+    property bool isSchemeDropdownOpen: false
 
     property bool isSearchMode: false
     property string globalSearchQuery: ""
@@ -145,6 +146,8 @@ Item {
             } else if (root.highlightedBox === 5) {
                 if (generalLoader.item) generalLoader.item.focusWpDirInput();
             } else if (root.highlightedBox === 6) {
+            } else if (root.highlightedBox === 7) {
+                root.isSchemeDropdownOpen = !root.isSchemeDropdownOpen;
             }
         } else if (root.currentTab === 1) {
             if (root.highlightedBox === 0) {
@@ -888,10 +891,18 @@ Item {
         { tab: 0, boxIndex: 4, label: "Layout shortcut",   desc: "Toggle combination",     icon: "󰯍", color: "teal" },
         { tab: 0, boxIndex: 5, label: "Wallpaper directory",desc: "Absolute source path",  icon: "󰋩", color: "mauve" },
         { tab: 0, boxIndex: 6, label: "Workspaces",        desc: "Static count in topbar", icon: "󰽿", color: "red" },
+        { tab: 0, boxIndex: 7, label: "Colour scheme",     desc: "matugen palette & mode", icon: "󰸼", color: "peach" },
         { tab: 1, boxIndex: 1, label: "Location",          desc: "Saved places",           icon: "󰍎", color: "blue" },
         { tab: 1, boxIndex: 2, label: "Add a location",    desc: "Search by name",         icon: "󰥔", color: "blue" },
         { tab: 1, boxIndex: 3, label: "Temperature Unit",  desc: "Celsius / Fahrenheit / K", icon: "󰔄", color: "blue" }
     ]
+
+    function schemeLabel(val) {
+        for (var i = 0; i < Config.matugenSchemes.length; i++) {
+            if (Config.matugenSchemes[i].val === val) return Config.matugenSchemes[i].label;
+        }
+        return val;
+    }
 
     function getMatchingKeybindIndices(query) {
         if (query.trim() === "") return [];
@@ -1840,6 +1851,179 @@ Item {
                                             Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
                                         }
                                         MouseArea { id: wsPlusMa; anchors.fill: parent; hoverEnabled: true; onClicked: Config.workspaceCount = Math.min(10, Config.workspaceCount + 1) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Box 7: Colour scheme ─────────────────────────────────
+                    Rectangle {
+                        id: box7
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: col7scheme.implicitHeight + root.s(32)
+                        radius: root.s(12)
+
+                        property bool isActive: root.highlightedBox === 7
+                        color: isActive ? root.peach : root.surface0
+                        border.color: isActive ? root.peach : root.surface1
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                        clip: true
+
+                        MouseArea { anchors.fill: parent; onClicked: root.highlightedBox = 7; z: -1 }
+
+                        ColumnLayout {
+                            id: col7scheme
+                            anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; anchors.margins: root.s(16)
+                            spacing: root.s(10)
+
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: root.s(14)
+                                Item {
+                                    Layout.preferredWidth: root.s(22); Layout.alignment: Qt.AlignVCenter
+                                    Text {
+                                        anchors.centerIn: parent; text: "󰸌"; font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(18)
+                                        color: box7.isActive ? root.base : root.peach
+                                        Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                                    }
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true; Layout.alignment: Qt.AlignVCenter; spacing: root.s(3)
+                                    Text {
+                                        text: "Colour scheme"; font.family: "Inter"; font.weight: Font.Bold; font.pixelSize: root.s(14)
+                                        color: box7.isActive ? root.base : root.text; Layout.fillWidth: true
+                                        Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                                    }
+                                    Text {
+                                        text: "How matugen reads the wallpaper — applies at once"
+                                        font.family: "Inter"; font.pixelSize: root.s(11)
+                                        color: box7.isActive ? Qt.alpha(root.base, 0.75) : Qt.alpha(root.subtext0, 0.7); Layout.fillWidth: true
+                                        Behavior on color { ColorAnimation { duration: 220; easing.type: Easing.OutExpo } }
+                                    }
+                                }
+
+                                // Light/dark, as two pills rather than a switch:
+                                // a switch says on/off and neither of these is.
+                                RowLayout {
+                                    Layout.alignment: Qt.AlignVCenter | Qt.AlignRight; spacing: root.s(6)
+                                    Repeater {
+                                        model: [ { val: "dark", icon: "󰖔" }, { val: "light", icon: "󰖙" } ]
+                                        Rectangle {
+                                            width: root.s(38); height: root.s(28); radius: root.s(7)
+                                            property bool isSel: Config.matugenMode === modelData.val
+                                            color: isSel
+                                                ? (box7.isActive ? Qt.alpha(root.base, 0.35) : root.peach)
+                                                : (modeMa.containsMouse
+                                                    ? Qt.alpha(box7.isActive ? root.base : root.surface2, 0.35)
+                                                    : Qt.alpha(box7.isActive ? root.base : root.surface1, 0.2))
+                                            Behavior on color { ColorAnimation { duration: 200 } }
+                                            Text {
+                                                anchors.centerIn: parent; text: modelData.icon
+                                                font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(14)
+                                                color: parent.isSel
+                                                    ? (box7.isActive ? root.base : root.crust)
+                                                    : (box7.isActive ? Qt.alpha(root.base, 0.7) : root.subtext0)
+                                                Behavior on color { ColorAnimation { duration: 200 } }
+                                            }
+                                            MouseArea {
+                                                id: modeMa
+                                                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    if (Config.matugenMode === modelData.val) return;
+                                                    Config.matugenMode = modelData.val;
+                                                    Config.applyMatugen();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: root.s(34)
+                                radius: root.s(7)
+                                color: box7.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
+                                border.color: root.isSchemeDropdownOpen
+                                    ? (box7.isActive ? root.base : root.peach)
+                                    : (box7.isActive ? Qt.alpha(root.base, 0.3) : root.surface2)
+                                border.width: 1
+                                Behavior on border.color { ColorAnimation { duration: 200 } }
+                                RowLayout {
+                                    anchors.fill: parent; anchors.margins: root.s(9)
+                                    Text {
+                                        text: root.schemeLabel(Config.matugenScheme)
+                                        font.family: "JetBrains Mono"; font.pixelSize: root.s(11)
+                                        color: box7.isActive ? root.base : root.text; Layout.fillWidth: true
+                                        Behavior on color { ColorAnimation { duration: 220 } }
+                                    }
+                                    Text {
+                                        text: root.isSchemeDropdownOpen ? "▴" : "▾"; font.pixelSize: root.s(12)
+                                        color: box7.isActive ? Qt.alpha(root.base, 0.7) : root.subtext0
+                                    }
+                                }
+                                MouseArea {
+                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.highlightedBox = 7;
+                                        root.isSchemeDropdownOpen = !root.isSchemeDropdownOpen;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.isSchemeDropdownOpen
+                                    ? Config.matugenSchemes.length * root.s(28) + root.s(8) : 0
+                                radius: root.s(7)
+                                color: box7.isActive ? Qt.alpha(root.base, 0.15) : root.surface0
+                                border.color: box7.isActive ? Qt.alpha(root.base, 0.3) : root.surface1
+                                border.width: 1
+                                clip: true
+                                Behavior on Layout.preferredHeight { NumberAnimation { duration: 250; easing.type: Easing.OutExpo } }
+                                ListView {
+                                    id: schemeListView
+                                    anchors.fill: parent; anchors.topMargin: root.s(4); anchors.bottomMargin: root.s(4)
+                                    model: Config.matugenSchemes; interactive: false
+                                    opacity: parent.Layout.preferredHeight > root.s(10) ? 1.0 : 0.0
+                                    Behavior on opacity { NumberAnimation { duration: 200 } }
+                                    delegate: Rectangle {
+                                        width: schemeListView.width - root.s(8); height: root.s(28)
+                                        anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
+                                        radius: root.s(4)
+                                        property bool isSel: Config.matugenScheme === modelData.val
+                                        color: schemeMa.containsMouse
+                                            ? Qt.alpha(box7.isActive ? root.base : root.peach, 0.2)
+                                            : (isSel ? Qt.alpha(box7.isActive ? root.base : root.peach, 0.1) : "transparent")
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        RowLayout {
+                                            anchors.fill: parent; anchors.leftMargin: root.s(8); anchors.rightMargin: root.s(8); spacing: root.s(6)
+                                            Text {
+                                                text: parent.parent.isSel ? "󰄬" : "󰸌"
+                                                font.family: "Iosevka Nerd Font"; font.pixelSize: root.s(11)
+                                                color: parent.parent.isSel
+                                                    ? (box7.isActive ? root.base : root.peach)
+                                                    : (box7.isActive ? Qt.alpha(root.base, 0.5) : root.overlay0)
+                                            }
+                                            Text {
+                                                text: modelData.label
+                                                font.family: "JetBrains Mono"; font.pixelSize: root.s(11)
+                                                color: parent.parent.isSel
+                                                    ? (box7.isActive ? root.base : root.peach)
+                                                    : (box7.isActive ? Qt.alpha(root.base, 0.8) : root.text)
+                                                Layout.fillWidth: true
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: schemeMa
+                                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.isSchemeDropdownOpen = false;
+                                                if (Config.matugenScheme === modelData.val) return;
+                                                Config.matugenScheme = modelData.val;
+                                                Config.applyMatugen();
+                                            }
+                                        }
                                     }
                                 }
                             }

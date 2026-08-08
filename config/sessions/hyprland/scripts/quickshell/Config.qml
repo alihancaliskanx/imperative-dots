@@ -90,6 +90,30 @@ Item {
     property string language: ""
     property string kbOptions: "grp:alt_shift_toggle"
 
+    // matugen ships nine scheme types and a light mode; every call here took the
+    // defaults because the flags were never passed. matugen-apply.sh reads these
+    // two out of settings.json.
+    property string matugenScheme: "scheme-tonal-spot"
+    property string matugenMode: "dark"
+    readonly property var matugenSchemes: [
+        { val: "scheme-tonal-spot",  label: "Tonal Spot" },
+        { val: "scheme-vibrant",     label: "Vibrant" },
+        { val: "scheme-expressive",  label: "Expressive" },
+        { val: "scheme-content",     label: "Content" },
+        { val: "scheme-fidelity",    label: "Fidelity" },
+        { val: "scheme-fruit-salad", label: "Fruit Salad" },
+        { val: "scheme-rainbow",     label: "Rainbow" },
+        { val: "scheme-neutral",     label: "Neutral" },
+        { val: "scheme-monochrome",  label: "Monochrome" }
+    ]
+
+    // Re-themes from the wallpaper awww is already showing, so a scheme change
+    // needs no wallpaper path kept anywhere.
+    function applyMatugen() {
+        config.updateJsonBulk({ matugenScheme: config.matugenScheme, matugenMode: config.matugenMode });
+        sh(`bash "${hyprDir}/scripts/matugen-apply.sh" && bash "${hyprDir}/scripts/reload.sh"`);
+    }
+
     property string weatherUnit: "metric"
 
     // Open-Meteo takes a coordinate, not a city id, so a location is a name for
@@ -460,6 +484,8 @@ Item {
                         if (config.rawSettings.wallpaperDir !== undefined) config.wallpaperDir = config.rawSettings.wallpaperDir;
                         if (config.rawSettings.language !== undefined && config.rawSettings.language !== "") config.language = config.rawSettings.language;
                         if (config.rawSettings.kbOptions !== undefined) config.kbOptions = config.rawSettings.kbOptions;
+                        if (config.rawSettings.matugenScheme !== undefined) config.matugenScheme = config.rawSettings.matugenScheme;
+                        if (config.rawSettings.matugenMode !== undefined) config.matugenMode = config.rawSettings.matugenMode;
                         if (config.rawSettings.weatherPlaces !== undefined
                             && config.rawSettings.weatherPlaces.length > 0) {
                             config.weatherPlaces = config.rawSettings.weatherPlaces;
