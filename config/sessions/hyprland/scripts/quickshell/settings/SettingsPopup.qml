@@ -445,21 +445,28 @@ Item {
     readonly property color yellow: _theme.yellow
     readonly property color red: _theme.red
 
+    // The layout toggle is Super + Alt + K -- a Hyprland binding in
+    // keybindings.conf that runs `hyprctl switchxkblayout main next`.
+    //
+    // This list used to offer the xkb grp:* options, and each was wrong twice
+    // over: settings.conf keeps kb_options empty, and nothing anywhere reads
+    // kbOptions back out of settings.json, so choosing one wrote a string no
+    // part of the system ever looked at. The entry it defaulted to, Alt+Shift,
+    // was also the one combination that cannot be used here --
+    // grp:alt_shift_toggle fires on any Alt+Shift, which would take
+    // Alt+Shift+Tab away from window cycling.
+    //
+    // So it names the real shortcut instead. Offering alternatives again means
+    // rewriting the bind in keybindings.conf, not writing an xkb option.
     property var kbToggleModelArr: [
-        { label: "Alt + Shift", val: "grp:alt_shift_toggle" },
-        { label: "Win + Space", val: "grp:win_space_toggle" },
-        { label: "Caps Lock", val: "grp:caps_toggle" },
-        { label: "Ctrl + Shift", val: "grp:ctrl_shift_toggle" },
-        { label: "Ctrl + Alt", val: "grp:ctrl_alt_toggle" },
-        { label: "Right Alt", val: "grp:toggle" },
-        { label: "No Toggle", val: "" }
+        { label: "Super + Alt + K", val: "" }
     ]
 
     function getKbToggleLabel(val) {
         for (let i = 0; i < root.kbToggleModelArr.length; i++) {
             if (root.kbToggleModelArr[i].val === val) return root.kbToggleModelArr[i].label;
         }
-        return "Alt + Shift";
+        return "Super + Alt + K";
     }
 
     ListModel { id: dynamicKeybindsModel }

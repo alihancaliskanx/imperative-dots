@@ -88,7 +88,11 @@ Item {
     property int initialWorkspaceCount: 8
     property string wallpaperDir: Quickshell.env("WALLPAPER_DIR") || (homeDir + "/Pictures/Wallpapers")
     property string language: ""
-    property string kbOptions: "grp:alt_shift_toggle"
+    // Empty, to match `kb_options =` in settings.conf. The layout toggle is the
+    // Super+Alt+K binding, not an xkb option -- see kbToggleModelArr in
+    // SettingsPopup.qml. Defaulting this to grp:alt_shift_toggle only made the
+    // panel claim a combination that was neither set nor usable.
+    property string kbOptions: ""
 
     // matugen ships nine scheme types and a light mode; every call here took the
     // defaults because the flags were never passed. matugen-apply.sh reads these
